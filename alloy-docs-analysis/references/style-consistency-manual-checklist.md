@@ -148,7 +148,7 @@ actual target page's title.
 From `writers-toolkit/docs/sources/write/style-guide/security/index.md`:
 any example token, API key, or credential in documentation should be
 obviously invalid, not merely inconvenient-but-technically-valid-looking
-(e.g. `glsa_iNValIdinValiDinvalidinvalidinva_5b582697` for a Grafana Labs
+(e.g. `glsa_xxxxxxxxxxxxxxxx` for a Grafana Labs
 token, `github_pat_XXXXXXXXXXXXXXXX` for a GitHub token — the source's own
 examples). **Directly relevant to Alloy**: config examples routinely include
 `basic_auth`, `bearer_token`, API keys for cloud exporters/receivers

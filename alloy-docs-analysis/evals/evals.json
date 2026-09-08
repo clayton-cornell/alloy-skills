@@ -1,0 +1,570 @@
+{
+  "_source": "Structure and eval-writing pattern adapted from docs-ai/skills/docs-review/evals/evals.json (grafana/docs-ai). Copied 2026-07-28. Test cases below are original to alloy-docs-analysis.",
+  "skill_name": "alloy-docs-analysis",
+  "usage_modes": [
+    "standalone: invoked directly on one Alloy documentation topic at a time, batch size of one",
+    "delta-pr: invoked with a PR link/number or git diff, per references/delta-pr-mode.md",
+    "batch-stability-sweep: the narrow stability-badge sweep across multiple components, per references/batch-modes.md",
+    "batch-general-review: the general-purpose multi-topic sweep, per references/batch-modes.md"
+  ],
+  "file_selection": {
+    "note": "Select real files from alloy/docs/sources/reference/components/ or alloy/docs/sources/ per each case's file_selection_guidance. Verify the file still exists and matches the guidance before running — the repo changes over time."
+  },
+  "evals": [
+    {
+      "id": 1,
+      "mode": "standalone",
+      "review_type": "A well-maintained component reference page where source and docs are expected to already match, to confirm the skill doesn't manufacture findings when there aren't any.",
+      "file_selection_guidance": "Choose a reference/components/*.md page for a stable, non-experimental component that hasn't changed recently (check git log). otelcol.processor.transform.md is a known-good baseline from the skill's own dry run.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "All five steps run in order. Accuracy and completeness sections report no issues found, explicitly stated rather than omitted. Audience section names a persona (likely Expert) with evidence. Style section reports Vale/make vale results or explicitly notes it couldn't run them.",
+      "expectations": [
+        "Report includes all six output sections (Summary, Audience, Accuracy issues, Completeness gaps, Style & consistency, Open questions), even when empty",
+        "Empty sections say so explicitly rather than being omitted",
+        "Audience section names one of Learner/Practitioner/Expert/Operator with textual evidence, not just a readability score",
+        "No accuracy or completeness issue is reported without both a doc-line and a source file:line citation",
+        "Style section separates automated (Vale/make vale) findings from manual/cross-topic findings"
+      ]
+    },
+    {
+      "id": 2,
+      "mode": "standalone",
+      "review_type": "A component reference page suspected or known to have a stale example or renamed attribute, to confirm the skill catches real drift rather than only confirming clean pages.",
+      "file_selection_guidance": "Pick a component that had a recent PR renaming or removing an attribute, or deliberately introduce one stale attribute name into a copy of a topic file for testing (do not run against the real file in this case). Check CHANGELOG.md for recent breaking changes to find a real candidate.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 3 identifies the specific discrepancy, citing both the doc line making the claim and the source line/file that contradicts it. The discrepancy appears in the 'Accuracy issues' section of the report, not buried in 'Open questions'.",
+      "expectations": [
+        "At least one accuracy issue is reported with both a doc citation and a source citation",
+        "The discrepancy is in the 'Accuracy issues' section, not 'Open questions'",
+        "The report does not soften a confirmed discrepancy into a hedge when the source clearly contradicts the doc",
+        "Other sections (completeness, style) still complete normally rather than stopping early"
+      ]
+    },
+    {
+      "id": 3,
+      "mode": "standalone",
+      "review_type": "A component reference page where the Go source has an attribute, block, or enum value added since the doc was last updated, to test Step 4 completeness detection.",
+      "file_selection_guidance": "Cross-reference a component's Arguments struct against its doc page for a component that changed recently (git log on the source directory). Look for a case where source has more alloy-tagged fields than the doc's tables list.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 4 identifies the specific missing attribute/block/enum value, naming where it lives in source and where it should logically go in the doc. Unexported or untagged fields are correctly excluded from the gap list.",
+      "expectations": [
+        "At least one completeness gap is reported, naming the field, its type, and its source location",
+        "The gap includes a suggested doc location, not just 'add it somewhere'",
+        "No unexported (lowercase) or untagged struct field is reported as a gap",
+        "The report distinguishes this from an accuracy issue — it's something missing, not something wrong"
+      ]
+    },
+    {
+      "id": 4,
+      "mode": "standalone",
+      "review_type": "A deep reference/components page to confirm the skill's Alloy-specific persona calibration — Expert-tier pages should not be flagged for lacking a beginner on-ramp.",
+      "file_selection_guidance": "Any reference/components/*.md page with no introductory/conceptual framing, going straight into Usage/Arguments.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the audience assessment.",
+      "expected_output": "Audience section infers Expert (or Expert-leaning) persona and does NOT flag the absence of a conceptual introduction as a gap, per the Alloy-specific calibration note in references/personas.md.",
+      "expectations": [
+        "Persona inferred is Expert or explicitly notes Expert/Operator layering",
+        "Report does not flag missing beginner-level framing as a finding for this page",
+        "Report still answers 'what's missing for this reader' with something other than 'needs an introduction' — e.g., missing edge cases, unclear constraints, or absent troubleshooting detail",
+        "No mismatch is flagged between persona and doc position, since deep reference pages are expected to be Expert-tier"
+      ]
+    },
+    {
+      "id": 5,
+      "mode": "standalone",
+      "review_type": "A non-component conceptual or task page (not under reference/components/), to confirm Steps 3-4 degrade gracefully without a clean source package to diff against.",
+      "file_selection_guidance": "Choose a page from docs/sources/introduction/, get-started/, or configure/ that makes at least one verifiable technical claim (a default port, a file path, a flag name).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 0 explicitly notes this isn't a component reference page. Steps 3-4 still verify individual claims where possible, but the report says so explicitly rather than silently skipping or forcing a component-style struct diff.",
+      "expectations": [
+        "Report explicitly states the page isn't a component reference page and explains how Steps 3-4 were adapted",
+        "Any verifiable claim (port, path, flag name) found in the page is checked against source, not skipped",
+        "The report doesn't fabricate a 'Arguments/Blocks' style completeness diff for a page with no Arguments struct",
+        "Sections are still fully present per the standard output format"
+      ]
+    },
+    {
+      "id": 6,
+      "mode": "standalone",
+      "review_type": "Environment without Docker/Podman available, to confirm the skill degrades honestly on the Vale/make vale step rather than fabricating scores.",
+      "file_selection_guidance": "Any reference/components/*.md page. Run this case in an environment where `make vale` and Docker/Podman are confirmed unavailable (or simulate by noting unavailability in the prompt).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill. Note: Docker/Podman isn't available in this environment, and host-installed vale is also not installed.",
+      "expected_output": "The report explicitly states that neither make vale nor host vale could be run, rather than presenting fabricated Vale findings or silently omitting the Style & consistency section. Manual style checklist and cross-topic comparison still run since they don't depend on tooling.",
+      "expectations": [
+        "Report explicitly states Vale/make vale could not be run and why",
+        "No fabricated Vale rule findings or readability scores appear",
+        "Manual style checklist findings are still present",
+        "Cross-topic comparison findings are still present",
+        "The audience assessment's readability sub-step also notes the same tooling gap rather than inventing scores"
+      ]
+    },
+    {
+      "id": 7,
+      "mode": "standalone",
+      "review_type": "A reference/cli/*.md page, to confirm the skill uses the CLI-specific source-mapping method (pflag registrations, not Arguments structs) and catches the known real gap: cmd_run.go deprecates both cluster.use-discovery-v1 and feature.prometheus.metric-validation-scheme via addDeprecatedFlags(), but run.md's Deprecated flags section only documents the second one.",
+      "file_selection_guidance": "Use docs/sources/reference/cli/run.md against internal/alloycli/cmd_run.go. This is a real, currently-existing gap as of 2026-07-28 — confirm it's still present before running (check cmd_run.go's addDeprecatedFlags() call list against run.md's Deprecated flags section) in case it's been fixed since.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 4 (completeness) identifies cluster.use-discovery-v1 as an undocumented deprecated flag, citing internal/alloycli/cmd_run.go's addDeprecatedFlags() function. The report distinguishes this from a normal missing-attribute gap — it's specifically an undocumented deprecation.",
+      "expectations": [
+        "Report identifies the CLI page's source file as internal/alloycli/cmd_run.go, not a component Arguments struct",
+        "Completeness gaps section reports cluster.use-discovery-v1 as undocumented",
+        "The gap citation points to addDeprecatedFlags() specifically, not just 'the source'",
+        "Other documented flags (e.g. feature.prometheus.metric-validation-scheme) are not falsely flagged as gaps",
+        "If reference/cli/otel.md or environment-variables.md come up in the same run, the report doesn't attempt to verify GODEBUG/GOGC/GOMAXPROCS/GOTRACEBACK against Alloy source, and flags otel.md's external-module flags as needing the upstream otelcol package rather than fabricating a verification"
+      ]
+    },
+    {
+      "id": 8,
+      "mode": "standalone",
+      "review_type": "A stdlib reference page, to confirm the skill uses the syntax-module source mapping (not Arguments structs or CLI flags) and correctly cross-checks stdlib.go's ExperimentalIdentifiers/DeprecatedIdentifiers maps.",
+      "file_selection_guidance": "Use docs/sources/reference/stdlib/array.md against syntax/internal/stdlib/stdlib.go. As of 2026-07-28 this page is confirmed accurate (array.combine_maps and array.group_by both correctly carry the experimental shared-partial) — this eval checks the skill correctly reports a clean result, not that it finds a bug. For a version of this eval that expects a real finding, introduce a deliberate test case: remove the experimental shortcode from a copy of array.md, or add a new key to a copy of ExperimentalIdentifiers, and run against the copies.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report identifies the source as syntax/internal/stdlib/stdlib.go's array map (not a component Arguments struct or CLI cmd_*.go file), confirms array.concat/array.combine_maps/array.group_by all exist in source with matching behavior, and confirms the experimental markers on array.combine_maps/array.group_by are correct and complete — explicitly stating this rather than omitting the check because it passed.",
+      "expectations": [
+        "Report identifies the source location as syntax/internal/stdlib/stdlib.go, not a component or CLI file",
+        "All three array.* functions documented on the page are confirmed present in the array map in source",
+        "The experimental-status check for array.combine_maps and array.group_by is explicitly performed and reported, not skipped",
+        "No accuracy issue is fabricated just to have something to report",
+        "If get-started/syntax.md comes up in the same run, identifier/comment/terminator claims are checked against syntax/scanner/scanner.go specifically, not treated as unverifiable prose"
+      ]
+    },
+    {
+      "id": 9,
+      "mode": "standalone",
+      "review_type": "An install/run/configure page, to confirm the skill uses the packaging-specific source mapping (systemd units/Dockerfile, not Go source) and catches the known real gap: configure/linux.md states the packaged default is --storage.path=/var/lib/alloy, but packaging/deb/alloy.service, packaging/rpm/alloy.service, and Dockerfile's CMD all agree on /var/lib/alloy/data.",
+      "file_selection_guidance": "Use docs/sources/configure/linux.md against packaging/deb/alloy.service (or packaging/rpm/alloy.service) and packaging/deb/control/postinst. This is a real, currently-existing gap as of 2026-07-28 — confirm it's still present before running (check the ExecStart line in either systemd unit against the doc's stated default) in case it's been fixed since.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 3 (accuracy) identifies the --storage.path default mismatch, citing packaging/deb/alloy.service's (or rpm's) ExecStart line as the source of truth, not cmd_run.go's CLI-level default. The report notes this is a packaging-specific default, not the binary's own built-in default.",
+      "expectations": [
+        "Report identifies the source as a systemd unit file (packaging/deb/alloy.service or packaging/rpm/alloy.service), not internal/alloycli/cmd_run.go",
+        "Accuracy issues section reports the --storage.path mismatch (/var/lib/alloy vs. /var/lib/alloy/data) with both doc and source citations",
+        "The report doesn't confuse this with the CLI's own built-in default (data-alloy/) — it correctly identifies packaging overrides the binary default",
+        "If set-up/install/docker.md comes up in the same run, the report does NOT flag it for the same issue, since that page already states the correct /var/lib/alloy/data value",
+        "CONFIG_FILE and environment-file-path claims on the same page are checked against packaging/environment-file and are not falsely flagged, since they're confirmed accurate"
+      ]
+    },
+    {
+      "id": 10,
+      "mode": "standalone",
+      "review_type": "A tutorial page with confirmed stale reference-style links, to confirm the skill's Link check resolves against the target's real location rather than accepting an alias/redirect as 'resolved', and extracts reference-style link definitions (not just inline links).",
+      "file_selection_guidance": "Use docs/sources/tutorials/first-components-and-stdlib.md. As of 2026-07-28 this page has two confirmed stale reference-style links: '[configuration syntax]: ../../get-started/configuration-syntax/' and '[Components configuration language]: ../../get-started/configuration-syntax/components/'. Confirm both are still stale before running (check whether get-started/syntax.md and get-started/components/configure-components.md still carry aliases redirecting from the old configuration-syntax/ paths) in case this has been fixed since.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The Link findings subsection identifies both stale links, explains that they only resolve via each target's aliases redirect (not directly), and proposes the exact corrected paths: ../../get-started/syntax/ and ../../get-started/components/configure-components/.",
+      "expectations": [
+        "Both stale reference-style link definitions are identified, not just inline links",
+        "The report explains the links only work via an aliases redirect, not because they point at the real current location",
+        "The proposed fix for each link is the exact corrected path, not just 'this link is stale'",
+        "Other, already-correct reference-style links in the same file (e.g. '../../reference/stdlib/') are not falsely flagged",
+        "If the page mixes link styles (reference-style vs. inline, relative vs. absolute URL) inconsistently, that's reported separately from the staleness findings"
+      ]
+    },
+    {
+      "id": 11,
+      "mode": "standalone",
+      "review_type": "A multi-component collect/*.md page, to confirm the skill's self-referential completeness check (stated component list vs. actual examples) catches the known real gap: collect/opentelemetry-data.md's component list is missing otelcol.processor.memory_limiter, which its own batching example uses.",
+      "file_selection_guidance": "Use docs/sources/collect/opentelemetry-data.md. As of 2026-07-28 this is a real, currently-existing gap — confirm the 'Components used in this topic' list still omits otelcol.processor.memory_limiter before running, in case it's been fixed since.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 4 (completeness) identifies otelcol.processor.memory_limiter as used in the 'Configure batching' example but missing from the page's own 'Components used in this topic' list, and proposes adding it in the same style as the existing entries.",
+      "expectations": [
+        "Report identifies this as a self-referential completeness gap (doc vs. itself), not a Go-source completeness gap",
+        "otelcol.processor.memory_limiter is specifically named as the missing entry",
+        "The proposed fix shows the corrected list entry, not just 'the list is incomplete'",
+        "The five components that are already listed are not falsely flagged as missing or extraneous",
+        "If a monitor/*.md page comes up in the same run, the skill correctly checks the per-section 'requires N components' convention (counting by component type, not instance) rather than expecting a single whole-page list"
+      ]
+    },
+    {
+      "id": 12,
+      "mode": "standalone",
+      "review_type": "troubleshoot/debug.md, to confirm the skill's log-message-text check catches confirmed real mismatches ('starting server'/'terminating server'/'started scheduled components' don't match actual source) while correctly confirming accurate ones (discovery.process warning, 'config reloaded'), using a representative sample rather than claiming exhaustive coverage.",
+      "file_selection_guidance": "Use docs/sources/troubleshoot/debug.md against internal/service/http/http.go, internal/runtime/internal/controller/scheduler.go, and internal/component/discovery/process/process_stub.go. As of 2026-07-28 these mismatches are confirmed real — verify before running in case messages have changed since.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Accuracy issues section reports that 'starting server'/'terminating server' and 'started scheduled components' don't match any found slog call (citing the real messages found instead), while confirming discovery.process's warning and 'config reloaded' as accurate. The report explicitly states which messages were sampled/checked rather than claiming full coverage of every quoted message on the page.",
+      "expectations": [
+        "At least one log-message mismatch is reported as an accuracy issue with both the doc's claim and the real source message cited",
+        "At least one log message is confirmed accurate and reported as such, not omitted",
+        "The report explicitly states it sampled a subset of quoted messages rather than implying every message on the page was verified",
+        "Cluster-related log messages are not fabricated as verified against ckit if that external module's source isn't actually inspected",
+        "The mismatched messages are not excused as 'close enough' or 'illustrative' without being reported as a real finding"
+      ]
+    },
+    {
+      "id": 13,
+      "mode": "standalone",
+      "review_type": "A non-reference task/concept page with no labels field at all, to confirm the skill doesn't manufacture a false 'missing labels.products' finding just because the generic style guide implies every page needs one.",
+      "file_selection_guidance": "Use docs/sources/introduction/why-alloy.md or docs/sources/set-up/install/docker.md — both confirmed to have no labels field as of 2026-07-28.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the frontmatter check.",
+      "expected_output": "The frontmatter check does not report a missing labels.products (or labels.stage) finding for this page, since it isn't a reference page and Alloy's own practice doesn't use labels outside reference/.",
+      "expectations": [
+        "No 'missing labels.products' finding is reported for this non-reference page",
+        "No 'missing labels.stage' finding is reported either, consistent with the existing scoping",
+        "Required fields that DO apply everywhere (title, description) are still checked normally",
+        "The report doesn't invent a labels block as a 'should add' suggestion for this page type"
+      ]
+    },
+    {
+      "id": 14,
+      "mode": "standalone",
+      "review_type": "A tutorial page with a real killercoda: field, to confirm the skill doesn't flag it as unknown/invalid, doesn't expect the generic tutorial fields Alloy doesn't use, and doesn't attempt to validate killercoda's internals against a nonexistent schema.",
+      "file_selection_guidance": "Use docs/sources/tutorials/send-logs-to-loki.md, which has a real killercoda: field with preprocessing.substitutions and backend.imageid, as of 2026-07-28.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the frontmatter check.",
+      "expected_output": "The frontmatter check does not flag the killercoda: field as unknown or invalid, does not attempt to validate its internal structure against any schema, and does not flag the absence of associated_technologies/authors/summary/tags as a gap.",
+      "expectations": [
+        "killercoda: field is not flagged as an unrecognized or invalid frontmatter field",
+        "No attempt is made to validate killercoda's internal structure (preprocessing.substitutions, backend.imageid) against a documented schema",
+        "Absence of associated_technologies/authors/summary/tags is not reported as a gap",
+        "Required fields that do apply (title, description) are still checked normally"
+      ]
+    },
+    {
+      "id": 15,
+      "mode": "standalone",
+      "review_type": "An install/*.md page, to confirm the skill's cross-topic comparison scopes siblings to the same subdirectory (not cross-family), correctly flags a real within-family inconsistency, and doesn't check the page against the generic Task template directly.",
+      "file_selection_guidance": "Use docs/sources/set-up/install/docker.md against its sibling docs/sources/set-up/install/kubernetes.md. As of 2026-07-28, docker.md has an explicit '## Verify' heading that kubernetes.md lacks (kubernetes.md folds verification into a numbered step and closing sentence instead) — confirm this is still the case before running.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Step 1 names the page's family (install) without checking it against the generic Task template. Cross-topic comparison in Step 5 compares against other set-up/install/*.md siblings specifically (not run/* or configure/* pages), and may note the Verify-heading inconsistency with kubernetes.md as a real, proposable finding rather than treating either page as simply wrong.",
+      "expectations": [
+        "Step 1 identifies the page as belonging to the install family rather than checking it against the generic Task template or the reference-page shape",
+        "Cross-topic comparison selects siblings from set-up/install/*.md, not run/* or configure/*",
+        "The report does not flag docker.md's structure as 'wrong' simply for not matching the generic Task template's Before-you-begin/action/Result/Next-steps shape",
+        "If the Verify-heading inconsistency with kubernetes.md is raised, it's framed as a within-family judgment call with a proposed resolution, not an automated rule violation"
+      ]
+    },
+    {
+      "id": 16,
+      "mode": "standalone",
+      "review_type": "reference/cli/run.md, to confirm the skill's sub-feature stability callout check catches the confirmed real inconsistency (ad hoc admonition for --windows.priority vs. the shared partial shortcode for Configuration conversion in the same file), proposes the correct partial for the subject type, and flags the component-vs-flag wording caveat rather than silently applying a mismatched fix.",
+      "file_selection_guidance": "Use docs/sources/reference/cli/run.md. As of 2026-07-28, the --windows.priority section uses an ad hoc admonition while the Configuration conversion section (same file) correctly uses the stability/public_preview.md shared partial — confirm both are still present before running.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Sub-feature stability callout findings identify the --windows.priority admonition as inconsistent with the Configuration conversion section's use of the shared partial, propose the stability/public_preview.md shortcode as the fix, and explicitly flag that the partial's 'component' wording doesn't perfectly fit a CLI flag, noting the precedent of the same partial already being used for a non-component subject in this file.",
+      "expectations": [
+        "The --windows.priority admonition is flagged as inconsistent with the Configuration conversion section's shortcode usage, both in the same file",
+        "The proposed fix names the specific partial (stability/public_preview.md), not just 'use a shortcode'",
+        "The wording mismatch (component vs. flag) is explicitly noted as a secondary caveat, not silently ignored or silently 'fixed' without comment",
+        "The Configuration conversion section's correct usage is not itself flagged as a problem",
+        "If community.md or experimental_feature.md would fit a different subject better, the report doesn't default to public_preview.md/experimental.md just because they were seen first"
+      ]
+    },
+    {
+      "id": 17,
+      "mode": "standalone",
+      "review_type": "A component reference page using docs/shared heavily, to confirm the general shortcode validity check catches missing required parameters and correctly excludes docs/public-preview/docs/private-preview/docs/experimental as Alloy conventions even though they're documented Grafana-wide shortcodes.",
+      "file_selection_guidance": "Use docs/sources/reference/components/otelcol/otelcol.processor.transform.md (multiple docs/shared calls with all three required parameters — lookup, source, version) as the clean baseline. For a version that expects a real finding, create a test copy with one docs/shared call missing its version parameter, or with a docs/public-preview call substituted in place of a real stability/*.md partial.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Shortcode validity findings confirm all docs/shared calls have their three required parameters (lookup, source, version), confirm no generic/other-product shortcodes are used, and report this explicitly as checked rather than omitting the section because nothing was wrong.",
+      "expectations": [
+        "Report explicitly confirms docs/shared calls have all required parameters, not just silence on the topic",
+        "No docs/public-preview, docs/private-preview, or docs/experimental usage is fabricated as a finding when none exists in the real file",
+        "If a test copy with a missing docs/shared parameter is used instead, the missing parameter is specifically named as the gap",
+        "Findings from this check are reported separately from Checks A/B/C and the sub-feature stability callout check, not merged into them"
+      ]
+    },
+    {
+      "id": 18,
+      "mode": "standalone",
+      "review_type": "A page with genuinely thin cross-topic evidence (very few real siblings) or ambiguous persona signals, to confirm the skill states uncertainty explicitly rather than reporting a confident-sounding but fabricated pattern or persona label.",
+      "file_selection_guidance": "Use a page from a small or unique doc family with fewer than 2 clear siblings in its own subdirectory (check current repo structure for a candidate before running, since this depends on how many pages exist in a given section at run time), or a page whose audience signals plausibly support more than one persona.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Where evidence for a cross-topic convention or persona fit is thin or mixed, the report says so explicitly (naming what was checked and why it's inconclusive) rather than asserting a confident finding built on a single data point or an ambiguous signal.",
+      "expectations": [
+        "If fewer than 2 real siblings exist for cross-topic comparison, the report says so explicitly rather than asserting a 'convention' from one example",
+        "If persona signals are mixed, the report states that explicitly alongside its best-supported call, rather than presenting one persona label with unwarranted confidence",
+        "No source file, mapping, or convention is presented as verified/confirmed when it was actually a guess between plausible candidates",
+        "The report distinguishes clearly between what was verified directly and what remains an open question"
+      ]
+    },
+    {
+      "id": 19,
+      "mode": "standalone",
+      "review_type": "A page containing a legitimate Alloy/Grafana-domain term not yet in the writers-toolkit dictionary, to confirm the skill distinguishes a genuine typo from a missing-but-legitimate term and drafts a real dictionary entry for the latter rather than just proposing to change the doc's wording.",
+      "file_selection_guidance": "Run make vale (or the raw vale fallback, noting the Grafana.Spelling caveat) against a real Alloy page and find a genuine Grafana.Spelling hit on a legitimate term (an Alloy-specific coined term, integration name, or abbreviation) not present in writers-toolkit/vale/dictionary/<letter>.jsonnet. Confirm the specific word is still missing before running, since the dictionary changes over time.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on Vale/Grafana.Spelling findings.",
+      "expected_output": "The report identifies the flagged word as a legitimate term rather than a typo, and proposes a drafted word.new(...) dictionary entry (correct category: general word, product name, or abbreviation) for writers-toolkit/vale/dictionary/<letter>.jsonnet, rather than proposing to reword the Alloy doc.",
+      "expectations": [
+        "The flagged word is correctly identified as a legitimate term, not a typo, based on consistent deliberate usage in context",
+        "A real word.new(...) entry is drafted, in the correct category shape (general/product/abbreviation) per writers-toolkit's own add-words.md format",
+        "The target file (writers-toolkit/vale/dictionary/<letter>.jsonnet) is named specifically, not just 'add to the dictionary'",
+        "The report notes this is a cross-repo proposal that isn't applied automatically",
+        "If the run used the raw local vale fallback rather than make vale, the report notes the Grafana.Spelling reliability caveat rather than proposing dictionary additions based on unreliable results"
+      ]
+    },
+    {
+      "id": 20,
+      "mode": "delta-pr",
+      "review_type": "A git diff/PR touching a single doc page, to confirm Delta/PR review mode reads the full current file for analysis context but scopes the default report output to changed-line findings, with a count of pre-existing findings outside the diff.",
+      "file_selection_guidance": "Construct a test diff against a real Alloy doc page (e.g. a small edit to docs/sources/reference/cli/run.md) that touches only a few lines, in a page known to have at least one pre-existing finding elsewhere (e.g. the confirmed --windows.priority stability callout inconsistency, if still present) outside the changed range.",
+      "prompt": "Review just the doc changes in this diff using the alloy-docs-analysis skill: {FILE_1}",
+      "expected_output": "The report reads the full current file for context, runs the normal Steps 1-5, but the default output only shows findings whose location falls within the diff's changed line ranges, plus a one-line count of additional pre-existing findings found outside the diff (not full detail on those).",
+      "expectations": [
+        "The report explicitly states its scope (e.g. 'PR delta only') near the top, per the Summary section's updated format",
+        "Findings reported in detail are limited to those within the changed line ranges",
+        "A count (not full detail) of pre-existing findings outside the diff is mentioned",
+        "The full file was read for context (evidenced by e.g. correct frontmatter validation or correct cross-topic comparison, which wouldn't be possible from the diff fragment alone)",
+        "If asked instead for a full review that also highlights what changed, the report shows all findings with in-changed-lines vs. pre-existing tags rather than filtering"
+      ]
+    },
+    {
+      "id": 21,
+      "mode": "standalone",
+      "review_type": "A component reference page with a config example containing a deliberate syntax error (missing brace/comma), to confirm the skill's example syntax validation catches it via alloy fmt, does not attempt semantic alloy validate on an isolated single-component fragment, and never attempts to build the alloy binary itself if it's missing.",
+      "file_selection_guidance": "Take a real component reference page's example and introduce a deliberate syntax error (e.g. remove a closing brace) in a copy for testing. Run once with the alloy binary already built locally (make alloy from the repo root), and once with no alloy binary available at all, to test both paths.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "When the binary is available: the report identifies the syntax error via alloy fmt's parser diagnostic, cites the exact broken line, and proposes the corrected example. It does not attempt alloy validate on the isolated single-component example and does not report unresolved forward_to/cross-component references as a finding. When the binary is NOT available: the report notes in Open questions that the alloy binary wasn't found and this specific check was skipped, and does not run `make alloy` or any other build command to produce it.",
+      "expectations": [
+        "The syntax error is caught and cited with the exact parser diagnostic, when the binary is available",
+        "A corrected version of the example is proposed, not just 'this example has an error'",
+        "alloy validate is not run on the isolated single-component fragment as if it were a complete config",
+        "No false-positive finding about unresolved cross-component references (e.g. forward_to targets not defined in the snippet)",
+        "If the alloy binary isn't available, the report says so explicitly in Open questions rather than skipping the check silently",
+        "If the alloy binary isn't available, the skill does NOT run make alloy or any other build command to produce it — it only checks for and uses a binary that's already present"
+      ]
+    },
+    {
+      "id": 22,
+      "mode": "standalone",
+      "review_type": "A page using the marketing term 'single pane of glass' instead of 'single interface'/'unified interface', to confirm the terminology check catches a word-list violation that has no dedicated Vale rule, without re-flagging terms Vale already covers (including ones this skill previously, incorrectly, thought were uncovered).",
+      "file_selection_guidance": "Use or construct a test page containing the phrase 'single pane of glass' in prose. Confirm no Vale rule covers this phrase (neither a standalone rule file nor an entry in WordList.yml's substitution table) before running.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the manual style checklist.",
+      "expected_output": "The report flags 'single pane of glass' as a word-list violation (should be 'single interface' or 'unified interface'), citing references/word-list.md, and does not claim this is already caught by make vale since there's no dedicated rule for it. If the test page also happens to use 'datasource' (one word) or 'timeseries', the report correctly identifies those as already Vale-covered via WordList.yml's substitution table, not as additional manual-only findings.",
+      "expectations": [
+        "The 'single pane of glass' issue is flagged as a real finding with the corrected term proposed",
+        "The report notes this specific term has no dedicated Vale rule, rather than assuming make vale already covers it",
+        "Terms that DO have dedicated Vale rules or WordList.yml substitution entries (e.g. 'agentless', 'datasource', 'timeseries', 'menu icon') are not redundantly re-flagged manually if make vale already ran and reported them",
+        "If 'agentless'/'no-collector' comes up, the Alloy-specific context (Alloy replaced Grafana Agent) is mentioned when explaining the finding"
+      ]
+    },
+    {
+      "id": 23,
+      "mode": "batch-stability-sweep",
+      "review_type": "An explicit request to sweep all otelcol.* component stability badges, to confirm Batch stability-badge sweep mode enumerates the actual directory tree (not a nonexistent master list), scopes to the requested namespace rather than the whole tree, and produces one consolidated table rather than separate per-component reports.",
+      "file_selection_guidance": "Use docs/sources/reference/components/otelcol/ as the target namespace.",
+      "prompt": "Check the stability badges for all otelcol.* components using the alloy-docs-analysis skill — are any of them stale compared to source?",
+      "expected_output": "A single consolidated table (component | doc labels.stage | source Stability | match/mismatch) covering the otelcol.* namespace specifically, not the whole reference/components tree, produced by walking the actual directory rather than reading a generated index page.",
+      "expectations": [
+        "The report is a single consolidated table, not N separate per-component reports",
+        "The report does not attempt to read reference/components/_index.md as a literal list of components",
+        "Scope is correctly limited to otelcol.* rather than silently expanding to every component in the repo",
+        "Stability comparison uses the meaning-based mapping (not string equality) for the GA case",
+        "If the request had been ambiguous about scope, the report would have confirmed scope first rather than assuming 'everything'"
+      ]
+    },
+    {
+      "id": 24,
+      "mode": "standalone",
+      "review_type": "otelcol.receiver.kafka's reference page, to confirm the skill's changelog drift check catches the confirmed silent behavioral change (resolve_canonical_bootstrap_servers_only is now a no-op per the 1.18.0 CHANGELOG despite no structural change) without duplicating it as a redundant Step 3 structural finding.",
+      "file_selection_guidance": "Use docs/sources/reference/components/otelcol/otelcol.receiver.kafka.md against CHANGELOG.md's 1.18.0 BREAKING CHANGES entry for resolve_canonical_bootstrap_servers_only. Confirm the doc still describes the argument's old behavior (resolving bootstrap servers) as of 2026-07-28.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report identifies that resolve_canonical_bootstrap_servers_only is now a no-op per the CHANGELOG, even though the argument still exists with the same name/type in source, and flags this as a changelog-drift finding distinct from ordinary Step 3 structural checks.",
+      "expectations": [
+        "The no-op behavioral change is identified and cited to the specific CHANGELOG entry",
+        "The finding is reported as a changelog-drift finding, not duplicated as a generic Step 3 structural accuracy issue, since the argument's structural shape (name/type) didn't change",
+        "The report doesn't re-flag ordinary renamed/removed fields as 'changelog drift' findings when Step 3/4 already covers them directly against current source",
+        "If a BREAKING CHANGES entry with migration guidance is relevant to the page, the report checks whether that guidance is reflected in the doc, not just whether the doc is structurally correct"
+      ]
+    },
+    {
+      "id": 25,
+      "mode": "standalone",
+      "review_type": "A component reference page with a real Arguments/Blocks table, to confirm the parameter table format check validates the exact column shape (Name/Type/Description/Default/Required for arguments; Block/Description/Required wrapped in docs/alloy-config for blocks) rather than treating table use as a vague scannability suggestion.",
+      "file_selection_guidance": "Use docs/sources/reference/components/otelcol/otelcol.processor.transform.md as the clean baseline (correct table shape confirmed). For a version expecting a real finding, use a test copy with one column removed from the Arguments table, or with the Blocks table not wrapped in docs/alloy-config.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report confirms the Arguments and Blocks tables follow the exact required column shape, or, for a modified test copy, identifies the specific missing column or missing docs/alloy-config wrapper and proposes the corrected table.",
+      "expectations": [
+        "The report checks for the exact column set (Name/Type/Description/Default/Required for Arguments; Block/Description/Required for Blocks), not just 'is this a table'",
+        "A missing docs/alloy-config wrapper around a Blocks table is identified as a specific, real finding if present in a test copy",
+        "The clean baseline file is confirmed correct rather than flagged with a fabricated issue",
+        "The report doesn't attempt to apply a 'lead paragraph length' or 'bullet-to-prose ratio' rule as if those were mechanically checkable, consistent with additional-checks.md's note that they remain judgment calls"
+      ]
+    },
+    {
+      "id": 26,
+      "mode": "standalone",
+      "review_type": "A shared/stability partial page with a real headless: true field, to confirm the frontmatter check doesn't flag it as unknown, consistent with how killercoda: is already handled for tutorials.",
+      "file_selection_guidance": "Use docs/sources/shared/stability/public_preview.md or any other shared/stability/*.md partial, all confirmed to carry headless: true as of 2026-07-28.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the frontmatter check.",
+      "expected_output": "The frontmatter check does not flag headless: true as an unknown or invalid field, recognizing it as the expected, intentional convention for shared/**/*.md partial pages.",
+      "expectations": [
+        "headless: true is not flagged as an unrecognized or invalid frontmatter field",
+        "The report doesn't attempt to validate headless against a documented schema, since none exists",
+        "If a standalone (non-shared) page were found with headless: true instead, the report would flag that as suspicious rather than treating it the same as the shared-partial case"
+      ]
+    },
+    {
+      "id": 27,
+      "mode": "standalone",
+      "review_type": "A test page with a gerund heading, a gerund-led sentence in body prose, a long parenthetical aside, and a semicolon-joined sentence, to confirm the manual style checklist scopes each rule correctly: gerunds flagged in both headings (Vale-mirrored) and body prose (stricter house rule, explicitly labeled as such), parentheses as round brackets only not square-bracket links, semicolons as a suggestion not a ban.",
+      "file_selection_guidance": "Construct a test copy of a real Alloy doc page with: a heading like '## Configuring the receiver' (gerund), a body sentence built around a gerund (e.g. 'Configuring the receiver lets you customize behavior.'), a sentence with a 4+ character parenthetical aside, a semicolon-joined sentence, and at least one legitimate Markdown reference-style link (to confirm it isn't falsely flagged under the parentheses rule).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the manual style checklist (assume Docker/Podman isn't available).",
+      "expected_output": "The report flags the gerund heading with a proposed bare-infinitive rewrite, flags the body-prose gerund sentence with a proposed direct-verb rewrite (explicitly noting this is a stricter house rule beyond Vale's own heading-only rule), flags the parenthetical aside as a suggestion-level finding with a proposed integration, and flags the semicolon as a suggestion-level finding — without flagging the Markdown reference-style link's square brackets under the parentheses rule.",
+      "expectations": [
+        "The gerund heading is flagged with a specific bare-infinitive (or non-gerund noun-phrase) rewrite proposed",
+        "The body-prose gerund sentence is also flagged, with the report explicitly noting this is a stricter house rule beyond what Vale's Gerunds.yml itself covers",
+        "The parenthetical aside is flagged as a suggestion, not an error, with a proposed integration or removal",
+        "Square-bracket Markdown link syntax is not flagged under the parentheses rule",
+        "The semicolon is flagged as a suggestion to reconsider, not as an outright prohibited construct"
+      ]
+    },
+    {
+      "id": 28,
+      "mode": "standalone",
+      "review_type": "A page with a manually-incremented ordered list (1./2./3.) instead of repetitive lazy numbering (1./1./1.), to confirm the skill catches this real, Vale-uncovered gap by reading the raw Markdown source rather than the rendered output (which looks identical either way).",
+      "file_selection_guidance": "Construct a test copy of a real Alloy doc page (e.g. based on set-up/install/kubernetes.md, confirmed to correctly use repetitive numbering as of 2026-07-28) with an ordered list's source manually renumbered to 1./2./3./4./5. instead of repetitive 1.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the manual style checklist.",
+      "expected_output": "The report flags the manually-incremented list as a lazy-numbering violation, citing writers-toolkit's documented 'repetitive list numbering' convention, and proposes changing every entry to 1. A correctly-lazy-numbered list elsewhere on the same page (or in a clean baseline file) is not flagged.",
+      "expectations": [
+        "The manually-incremented ordered list is flagged as a lazy-numbering violation",
+        "The proposed fix is to change every list entry to repetitive 1., not to renumber it some other way",
+        "The report cites the writers-toolkit markdown-guide convention as the basis for the finding",
+        "A correctly lazy-numbered list (e.g. in set-up/install/kubernetes.md or tutorials/send-logs-to-loki.md, both confirmed compliant) is not falsely flagged",
+        "The report notes this check requires reading the raw Markdown source, since the rendered output is identical either way"
+      ]
+    },
+    {
+      "id": 29,
+      "mode": "standalone",
+      "review_type": "get-started/components/configure-components.md, to confirm the skill catches the confirmed real unordered-list period-consistency gap ('In this example:' list has three complete-sentence items with no periods) without over-flagging the page's other lists (Reference syntax, Next steps), which are correctly not complete sentences.",
+      "file_selection_guidance": "Use docs/sources/get-started/components/configure-components.md. As of 2026-07-28 the 'In this example:' list under '## Configuration blocks' has three complete-sentence items ('`endpoint` is a block that configures the remote endpoint', etc.) with no periods — confirm this is still the case before running.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the manual style checklist.",
+      "expected_output": "The report flags the 'In this example:' list's missing periods, citing writers-toolkit's rule that complete-sentence list items get periods consistently, and proposes the corrected list with periods added. The 'Reference syntax' and 'Next steps' lists (label:value fragments and link+description fragments, not complete sentences) are not flagged.",
+      "expectations": [
+        "The 'In this example:' list is flagged for missing periods on complete-sentence items",
+        "The proposed fix shows the corrected list text with periods added to all three items",
+        "The 'Reference syntax' list (Component name/label/export name fragments) is not falsely flagged, since those items aren't complete sentences",
+        "The 'Next steps' list (link + dash + description fragments) is not falsely flagged for the same reason",
+        "If an unordered list of independently-named items with no inherent order comes up, the report checks whether it's alphabetized, but doesn't flag a deliberately sequential list for not being alphabetical"
+      ]
+    },
+    {
+      "id": 30,
+      "mode": "standalone",
+      "review_type": "A component reference page with a realistic-looking (but fake) example credential in a basic_auth or bearer_token argument, to confirm the security check flags credentials that aren't obviously fake, per writers-toolkit's security guidance, and doesn't flag Alloy's own <VARIABLE_NAME> placeholder convention as a problem.",
+      "file_selection_guidance": "Construct a test copy of a component reference page with an auth example using a realistic-looking token (e.g. a plausible-looking bearer token string with no placeholder markers) instead of an obviously-fake one or Alloy's own <TOKEN> placeholder convention.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report flags the realistic-looking example credential as a security concern, citing writers-toolkit's guidance that example tokens should be obviously invalid, and proposes either an explicitly-fake token format or Alloy's own <VARIABLE_NAME> placeholder convention as the fix.",
+      "expectations": [
+        "The realistic-looking example credential is flagged as a security finding, not overlooked as a normal accuracy/style matter",
+        "The proposed fix is either an obviously-fake token format or Alloy's own placeholder convention, not a vague 'use a fake token'",
+        "An existing use of Alloy's own <VARIABLE_NAME> placeholder convention elsewhere on the page is not falsely flagged as a security issue",
+        "The finding is reported in the manual style checklist findings section, not fabricated as a Vale/automated finding"
+      ]
+    },
+    {
+      "id": 31,
+      "mode": "standalone",
+      "review_type": "A component reference page whose Blocks or Arguments table breaks the confirmed required-first-then-alphabetized row-order convention, to confirm the parameter table format check validates row order as a distinct finding from column shape.",
+      "file_selection_guidance": "Use a test copy of docs/sources/reference/components/otelcol/otelcol.processor.transform.md with its Blocks table reordered so an optional block (e.g. debug_metrics) appears before the required output block, or with the optional group's alphabetical order broken.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report flags the row-order violation as a distinct finding from column shape, citing the required-first/alphabetized-within-group convention, and proposes the corrected row order.",
+      "expectations": [
+        "The row-order violation is flagged specifically, separate from any column-shape finding",
+        "The proposed fix shows the corrected row order (required first, each group alphabetized)",
+        "A table with correct row order (e.g. the real, unmodified otelcol.processor.transform.md) is not falsely flagged",
+        "The finding cites writers-toolkit's developer-docs guidance as the basis for the convention"
+      ]
+    },
+    {
+      "id": 32,
+      "mode": "batch-general-review",
+      "review_type": "An ambiguous, broad request to scan 'the Alloy docs' for improvement opportunities, to confirm Batch documentation review mode proposes a bounded scope before running anything, rather than attempting a full-tree sweep, and produces a consolidated triaged summary rather than N full per-topic reports when a scope is eventually confirmed.",
+      "file_selection_guidance": "No specific file needed for the scope-negotiation part of this eval. For the execution part, use a small confirmed scope such as docs/sources/reference/cli/*.md (a handful of files) to keep the eval itself tractable.",
+      "prompt": "Can you scan the Alloy docs for improvement opportunities and gaps?",
+      "expected_output": "The response proposes a bounded starting scope (e.g. one subdirectory or namespace) and confirms it before running any analysis, rather than beginning a full-repository sweep. Once a scope is confirmed and small enough to execute within this eval, the output is a consolidated table/summary of findings across the topics in scope, with significant findings surfaced prominently and an offer to produce a full detailed report for any specific topic — not N full standalone-mode reports concatenated together.",
+      "expectations": [
+        "The response does not begin analyzing the entire docs tree without first proposing and confirming a bounded scope",
+        "A specific, reasonably-sized scope suggestion is offered (a subdirectory, namespace, or sample), not just a vague acknowledgment",
+        "Once scope is confirmed, the full Steps 0-5 analysis is still performed per topic internally (evidenced by real, source-cited findings, not shallow surface-level observations)",
+        "The final output is a consolidated, triaged summary across topics, not a full Output Format report repeated verbatim for each topic",
+        "Findings that recur across multiple topics in the batch are called out once as a systemic pattern, not repeated per topic",
+        "The response offers to produce a full detailed report for any specific topic on request"
+      ]
+    },
+    {
+      "id": 33,
+      "mode": "standalone",
+      "review_type": "A standard single-topic analysis with real findings, to confirm the report ends with a review_date reminder worded correctly (update after fixes are merged, not immediately after analysis, in YYYY-MM-DD format), and that an all-clean report doesn't need the reminder.",
+      "file_selection_guidance": "Use any real component reference page with at least one confirmed finding from prior evals (e.g. reference/cli/run.md's --windows.priority stability callout inconsistency, if still present).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The report ends with a closing reminder that once the report's fixes are merged (not before), the page's review_date frontmatter field should be updated to the merge date in YYYY-MM-DD format. The skill does not offer to set the field itself.",
+      "expectations": [
+        "A review_date reminder appears after the Open questions section",
+        "The reminder specifies updating review_date only once fixes are merged, not immediately after this analysis",
+        "The reminder specifies the YYYY-MM-DD date format",
+        "The skill does not offer or attempt to set the review_date field itself, consistent with the never-edit-files rule",
+        "If the same page were analyzed and found completely clean with no findings, the reminder would be omitted or reworded to note a review still occurred without prompting a fix-then-date-bump workflow"
+      ]
+    },
+    {
+      "id": 34,
+      "mode": "standalone",
+      "review_type": "A well-written page that triggers no Grafana.Readability* Vale alerts, to confirm Step 2 reports 'passes, no violation' per metric rather than fabricating a numeric score or treating the absence of an alert as an inability to assess readability — a real gap found during an independent test run.",
+      "file_selection_guidance": "Use a real Alloy page with generally clear, well-structured prose (check that make vale produces no Grafana.Readability* alerts for it before running).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill, focusing on the audience assessment.",
+      "expected_output": "The Audience section reports readability as passing (no threshold violations) for the relevant Grafana.Readability* metrics, explicitly noting that Vale doesn't surface an exact numeric score for a passing page, rather than inventing a score or treating this as an incomplete assessment.",
+      "expectations": [
+        "No fabricated numeric readability score is presented for a metric that produced no Vale alert",
+        "The report explicitly states passing metrics as a legitimate, complete finding, not a gap or an inability to assess",
+        "If any metric DID produce an alert, its actual cited value from the message is reported",
+        "The persona inference still proceeds normally using this readability outcome plus textual evidence, per Step C's method"
+      ]
+    },
+    {
+      "id": 35,
+      "mode": "standalone",
+      "review_type": "A run in an environment missing both the alloy binary and Docker/Podman, to confirm Step 0's upfront prerequisite check identifies both gaps before analysis begins, the skill asks the person about the missing alloy binary specifically (rather than silently deciding), never attempts to build/install either tool itself, and both end up reported in a distinct 'Skipped checks' section rather than folded into 'Open questions' — hardening driven by a real test run where an agent attempted to build alloy from source and failed due to missing Go.",
+      "file_selection_guidance": "Use any component reference page with alloy fenced code examples. Simulate or confirm an environment with no alloy binary on PATH and no Docker/Podman available.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill. Note: this environment has no Go toolchain, no alloy binary, and no Docker/Podman available.",
+      "expected_output": "The report identifies both missing prerequisites early (per Step 0 item 9) rather than discovering them lazily mid-step. For the missing alloy binary specifically, the response asks the person whether to build it first or proceed without that check, rather than silently deciding. The skill never attempts to run make alloy, go build, or install Docker/Podman. Both end up listed as entries in a dedicated 'Skipped checks' output section distinct from 'Open questions', and unrelated steps (Vale-independent manual checklist items, accuracy/completeness checks not requiring these tools) still complete normally.",
+      "expectations": [
+        "The report does not attempt to build the alloy binary or install Docker/Podman under any circumstance",
+        "For the missing alloy binary, the response explicitly asks the person whether to build it first, rather than silently skipping without asking",
+        "Both missing prerequisites are reported in a 'Skipped checks' section, not merged into 'Open questions'",
+        "Each skipped-check entry names the specific missing prerequisite and how to enable it",
+        "Steps and checks that don't depend on the missing tools still run and report normally, rather than the whole analysis stalling",
+        "No fabricated Vale findings or example-syntax-validation results appear despite the missing tooling"
+      ]
+    },
+    {
+      "id": 36,
+      "mode": "standalone",
+      "review_type": "A page from a family where Check A's product-name hardcoding violation recurs across multiple siblings (e.g. monitor/*.md pages), to confirm the skill notes the family-wide pattern as context while still reporting and proposing a fix for the current page's occurrence as a real, required defect — not downgrading it to a non-actionable 'policy-level' finding the way the frontmatter-template question sometimes is.",
+      "file_selection_guidance": "Use a monitor/*.md page (or construct a test family) where the title/frontmatter hardcodes 'Alloy' instead of using {{< param \"PRODUCT_NAME\" >}}, and spot-check at least one sibling to confirm the same pattern recurs.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "Cascade variable findings (Check A) report the hardcoded product name on this page as a real, required fix with the proposed {{< param >}} replacement, AND separately note that the same pattern likely recurs across sibling pages in the family — without treating the family-wide recurrence as a reason to skip, soften, or reclassify the finding as acceptable.",
+      "expectations": [
+        "The hardcoded product name on the current page is reported as a real Check A finding with the exact proposed {{< param >}} replacement",
+        "The report separately notes the pattern likely recurs across sibling pages, citing at least one spot-checked example",
+        "The finding is NOT downgraded to a 'policy-level' or non-actionable classification just because it's consistent across the family",
+        "The report explicitly distinguishes this case from the frontmatter-template systemic-convention case, per the guardrail in style-consistency-cascade-vars.md"
+      ]
+    },
+    {
+      "id": 37,
+      "mode": "standalone",
+      "review_type": "A page with alloy fenced examples, analyzed with an alloy binary present but older than the docs' current ALLOY_RELEASE cascade value, to confirm the skill compares versions, asks the person about upgrading rather than silently proceeding or silently upgrading, and caveats results explicitly if the person chooses to proceed anyway.",
+      "file_selection_guidance": "Use a component reference page with alloy fenced examples. Simulate an installed alloy binary reporting a version older than docs/sources/_index.md's ALLOY_RELEASE cascade value (e.g. installed v1.16.0 vs. current v1.18.0).",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill. Note: the locally installed alloy binary reports version v1.16.0.",
+      "expected_output": "The report compares the installed version against the docs' current ALLOY_RELEASE value, identifies it as outdated, and asks the person whether to rebuild/upgrade first or proceed with a caveat — rather than silently running the syntax check against the stale binary or silently upgrading it itself. If the person proceeds anyway, the syntax-validation results are explicitly caveated as reflecting an older Alloy version.",
+      "expectations": [
+        "The installed alloy version is compared against the current ALLOY_RELEASE cascade value from docs/sources/_index.md, not assumed current",
+        "The report asks the person about upgrading rather than silently deciding either way",
+        "The skill does not attempt to upgrade or rebuild the binary itself under any circumstance",
+        "If the person proceeds without upgrading, the syntax-validation results carry an explicit caveat about the version mismatch",
+        "This is reported in the 'Skipped checks' section (or an equivalent caveat there), not silently folded into the Accuracy issues section as if the results were unconditionally reliable"
+      ]
+    },
+    {
+      "id": 38,
+      "mode": "standalone",
+      "review_type": "A component reference page with a standard ## Usage section (containing a bare <LABEL> placeholder) and a real ## Examples section, to confirm the example syntax validation check excludes the Usage synopsis block from alloy fmt validation and does NOT report its expected 'failure' as a real finding or a documentation defect — a confirmed real gap found during an independent test run.",
+      "file_selection_guidance": "Use docs/sources/reference/components/otelcol/otelcol.processor.transform.md, which has a confirmed ## Usage section using the bare <LABEL> placeholder (otelcol.processor.transform \"<LABEL>\" { ... }) as of 2026-07-29, plus real ## Examples sections with complete, real-labeled configurations.",
+      "prompt": "Analyze {FILE_1} using the alloy-docs-analysis skill.",
+      "expected_output": "The example syntax validation check does not attempt to alloy fmt the ## Usage section's synopsis block, does not report any failure or finding related to it, and does not propose fixing the <LABEL> placeholder or characterize it as a documentation defect of any kind. Real blocks under ## Examples are still validated normally.",
+      "expectations": [
+        "The Usage section's synopsis block (containing the bare <LABEL> placeholder) is not run through alloy fmt, or if checked, its expected non-parse is explicitly recognized as not a real finding",
+        "No accuracy issue, completeness gap, or style finding proposes 'fixing' the <LABEL> placeholder or the Usage section's structure",
+        "The report does not characterize the Usage placeholder convention as a template-level or page-level documentation defect",
+        "Real, complete example blocks under ## Examples are still validated via alloy fmt as normal",
+        "If the report explains why the Usage block was excluded, it correctly attributes this to the block being a synopsis/shape illustration by established Alloy convention, not a broken example"
+      ]
+    }
+  ]
+}

@@ -73,23 +73,26 @@ script (`make-docs`) that re-detects the runtime independently
 inherited value) and overwrites any inherited `PODMAN` value, every time it
 runs.
 
-**`PULL=false` is the override that actually clears the
-`Failed to obtain podman configuration ... read-only file system` error.**
-The error fires during the image *pull*, which happens at the make level
-(`docs.mk:95-98` runs `$(PODMAN) pull -q $(VALE_IMAGE)` only when `PULL` is
-`true`, its default per `docs.mk:61-62`), not inside `make-docs`. Setting
-`PULL=false` skips that step entirely, and the subsequent container run
-succeeds against the already-cached image:
+**`PULL=false` removes one of the two places the error can fire — it is not
+a general fix.** The `vale` target invokes the runtime twice: once at the
+make level to pull the image (`docs.mk:95-98` runs
+`$(PODMAN) pull -q $(VALE_IMAGE)` only when `PULL` is `true`, its default
+per `docs.mk:61-62`), and again inside `make-docs`, which runs the container
+itself (`make-docs:846`, `make-docs:916`). `PULL=false` skips the first one:
 
 ```bash
 cd /home/ccornell/git-repos/alloy/docs
 PULL=false VALE_MINALERTLEVEL=suggestion make vale
 ```
 
-This requires `grafana/vale:latest` to already be present locally, so it
-works as a recovery path on a machine that has run Vale before, not on a
-cold cache. Adding `PODMAN=docker` alongside it is harmless but does nothing
-for the run itself, for the reason above.
+**This only helps when the failure is in the pull step**, and only when
+`grafana/vale:latest` is already cached locally. A genuinely broken Podman
+install still fails at the container run, because `make-docs` re-detects the
+runtime with its own unconditional assignment. Confirmed real:
+`PODMAN=docker PULL=false make vale` failed with the identical error on a
+machine where `docker` was independently working and `podman` was
+independently confirmed broken — see `references/PROVENANCE.md`. Treat
+`PULL=false` as one step in the sequence below, not as the answer.
 
 - **On first hitting the `Failed to obtain podman configuration ...
   read-only file system` error, retry `make vale` once, plain, with no
@@ -97,8 +100,9 @@ for the run itself, for the reason above.
   rootless-Podman runtime state rather than a permanently broken install,
   and a bare retry has been observed to clear it.
 - **If a plain retry doesn't clear it, try `PULL=false`** (with
-  `VALE_MINALERTLEVEL=suggestion` still set) before treating this as a
-  blocked check.
+  `VALE_MINALERTLEVEL=suggestion` still set). This helps only if the failure
+  was in the pull step; if the install itself is broken, expect the same
+  error again.
 - **If the person is available, asking them to run `make vale` themselves
   once in a plain terminal is also a valid way to clear a stale state** —
   a plain, unprivileged command, not a toolchain change, so it doesn't

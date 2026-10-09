@@ -231,11 +231,11 @@ without waiting for the final report.
      podman configuration"/read-only filesystem), a `PODMAN=docker`
      override does NOT fix the container run — the `make-docs` script
      `make vale` delegates to re-detects the runtime internally and
-     overrides any inherited `PODMAN` value on its own. **`PULL=false` is
-     the override that does work**, because the error fires during the
-     make-level image pull (`docs.mk`), not inside `make-docs`; it requires
-     the Vale image to already be cached locally. This same error signature
-     has also been confirmed to sometimes be a transient, stale
+     overrides any inherited `PODMAN` value on its own. **`PULL=false`
+     skips the make-level image pull**, which removes one of the two places
+     the error can fire, but it does not fix a genuinely broken Podman
+     install — `make-docs` still runs the container itself. This same error
+     signature has also been confirmed to sometimes be a transient, stale
      Podman runtime state rather than a permanent break, clearable by a
      plain retry (no override) or a clean `make vale` run elsewhere on the
      machine. See `references/style-consistency-vale.md`'s two "Troubleshooting:"

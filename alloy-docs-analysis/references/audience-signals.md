@@ -17,12 +17,18 @@ consistently across topics.
 ## Step A: run readability metrics locally
 
 Use the same mechanism as `references/style-consistency-vale.md` — prefer
-`make vale` from `alloy/docs/` (Docker/Podman, matches CI) over a raw local
-`vale` call. `Grafana.Readability*` rules (Flesch-Kincaid, Gunning Fog, SMOG,
+`VALE_MINALERTLEVEL=suggestion make vale` from `alloy/docs/` (Docker/Podman,
+matches CI) over a raw local `vale` call. **`VALE_MINALERTLEVEL=suggestion`
+is required, not optional** — every `Grafana.Readability*` rule is
+suggestion-level, so the bare `make vale` default (`error`-only, set in
+`docs/make-docs`) silently produces zero readability output on every run,
+which looks identical to "this page passes" but isn't confirmed at all. See
+`references/style-consistency-vale.md`'s writeup of this confirmed gap.
+`Grafana.Readability*` rules (Flesch-Kincaid, Gunning Fog, SMOG,
 Coleman-Liau, LIX, Automated Readability, Flesch Reading Ease) are part of the
 same `Grafana` style package `make vale` already runs — no separate invocation
-needed. If you already ran Vale for Step 5 in this same session, reuse that
-output instead of running it twice.
+needed. If you already ran Vale for Step 5 in this same session (with
+`VALE_MINALERTLEVEL=suggestion`), reuse that output instead of running it twice.
 
 If the initial `make vale` run fails with a Podman-specific error (for example,
 "Failed to obtain podman configuration" or other read-only-filesystem errors),

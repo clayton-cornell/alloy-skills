@@ -32,6 +32,24 @@ makes a stale link *functional* but not *correct*.
 
 ### Method
 
+0. **Never assert that a page has no inline links without running the
+   check.** This has been got wrong twice, on different pages, in the same
+   way: the report claimed "already fully reference-style, no inline links
+   outside the generated block" without running anything, and both times the
+   person found one on **line 15** — the
+   `embeds the [`<X>_exporter`](URL)` sentence in the Title section. That
+   sentence is the single most likely place for a leftover inline link on a
+   `prometheus.exporter.*` page, so check it first. Run this and paste the
+   output; an empty result is evidence, "I didn't notice any" is not:
+
+   ```bash
+   F=docs/sources/reference/components/<path>.md
+   G=$(grep -n 'START GENERATED' "$F" | cut -d: -f1)
+   grep -noE '\[[^]]+\]\([^)]+\)' "$F" | awk -F: -v g="$G" '$1+0 < g'
+   ```
+
+   The `awk` filter drops the generated compatible-components block, which
+   is never a finding (see `references/dont-flag.md`).
 1. **Extract every internal link, both forms** — reference-style definitions
    (`[label]: path`, usually collected at the bottom of the file) and inline
    links (`[text](path)`). Reference-style is the dominant convention across
@@ -85,6 +103,58 @@ above) — see the "Link text quality" item in
 `writers-toolkit` cross-check: no generic link text ("refer to [this
 file]", "click here"), and prefer the linked page's actual title as the
 link text.
+
+### Reference-link definitions are scoped by isolating shortcodes
+
+**A shortcode that renders its body through `.Page.RenderString` starts a
+separate Markdown parse.** Reference definitions inside it don't resolve for
+link text outside it, and definitions at document scope don't resolve for
+link text inside it. Verified directly in the website repo's `layouts/`.
+
+Isolating shortcodes (confirmed list): `admonition`, `docs/alloy-config`,
+`column-list`, `collapse`, `code`, `responsive-table`, `fixed-table`,
+`datatable`, `docs/glossary`, `shared`, `shared-snippet`, `qa`, `image-map`,
+`vimeo`, `docs/video`, `docs/play`, `docs/whats-new`, `docs/copy`,
+`docs/icon-heading`, `docs/learning-paths`, `docs/learning-journeys`.
+
+Two consequences:
+
+- **A label used both inside and outside a shortcode needs a definition on
+  both sides.** Those duplicate-looking definitions are load-bearing — never
+  "clean them up." Confirmed real pairs exist on
+  `remote.kubernetes.configmap`, `remote.kubernetes.secret`,
+  `pyroscope.write` (`[authorization]`, `[basic_auth]`, `[client]`,
+  `[endpoint]`, `[oauth2]`) and `prometheus.exporter.blackbox` (`[target]`).
+- **Converting inline links to reference style can silently break links** if
+  the anchor text sits inside a shortcode and the definition goes to
+  document scope. This happened to three links in one pass — a `cadvisor`
+  link, a `pyroscope.ebpf` one, and a `pyroscope.java` one, all with their
+  anchor text inside an `admonition`. Fixed by moving the definitions
+  inside.
+
+**Verify with a scope-aware check, not a flat grep.** A flat "every label
+has a definition somewhere in the file" grep *passes* on exactly the broken
+case above, because the definition does exist — just in the wrong parse
+scope. Track shortcode open/close depth and match uses to definitions per
+scope instance.
+
+Definitions indented to match an enclosing list item are fine — up to three
+spaces is still a valid definition, and `.InnerDeindent` strips the common
+indent anyway.
+
+### What NOT to flag (link check)
+
+- **Definition cluster ordering.** Reference-definition blocks don't need to
+  be alphabetical, and don't need to sit at the bottom of the document — the
+  bottom of a section is fine. Never propose re-sorting a definition block,
+  and don't derive an "alphabetical convention" from counting how many
+  sibling pages happen to be sorted.
+- **Mixed inline and reference style on its own.** Inline links are legacy
+  and get migrated in dedicated passes; a page mixing both isn't a finding
+  unless you're explicitly doing that migration.
+- **Anything inside the generated compatible-components block.**
+- **External third-party URLs pinning a branch or line anchor.** See
+  `references/dont-flag.md`.
 
 ## Shortcode validity check
 

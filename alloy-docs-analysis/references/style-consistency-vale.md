@@ -13,8 +13,24 @@ For Alloy, the real local invocation is:
 
 ```bash
 cd /home/ccornell/git-repos/alloy/docs
-make vale
+VALE_MINALERTLEVEL=suggestion make vale
 ```
+
+**`VALE_MINALERTLEVEL=suggestion` is not optional — omitting it silently
+hides most real findings.** Confirmed real, high-impact gap: `docs/make-docs`
+defaults `VALE_MINALERTLEVEL` to `error` (`readonly VALE_MINALERTLEVEL="${VALE_MINALERTLEVEL:-error}"`),
+which filters out every `suggestion`- and `warning`-level Vale rule — this
+includes `Grafana.GoogleWill` ("avoid 'will'"), `Grafana.GooglePassive`
+(passive voice), `Grafana.Acronyms`, and **all** `Grafana.Readability*`
+metrics used by Step 2's audience assessment (see
+`references/audience-signals.md`). A file with 20 real findings at the
+default `error`-only level showed **zero** — not a rare edge case. This
+matters because CI's actual check (`docs-ci` workflow, delegated to
+`grafana/writers-toolkit`'s reusable `docs-ci.yml`, not this repo's own
+`make-docs`) does **not** apply this restriction, so a locally-clean run at
+the default level can still fail or get flagged in a real PR. Always set
+`VALE_MINALERTLEVEL=suggestion` explicitly to match what CI actually
+surfaces — never rely on the bare `make vale` default.
 
 This pulls `grafana/vale:latest` via Podman/Docker (see `docs.mk`) and runs the
 same Vale rules and dictionary as CI, scoped to the `PROJECTS` set in
@@ -51,24 +67,51 @@ working.** `docs.mk` selects `podman` whenever the binary is merely
 *present* on `PATH`, regardless of whether it actually works — a
 broken/misconfigured Podman install still satisfies `command -v podman`,
 so `docker --version` working is irrelevant. **A `PODMAN=docker` override
-does not fix this** — the `vale` target delegates to a separate script
-(`make-docs`) that re-detects the runtime independently and overwrites any
-inherited `PODMAN` value, every time it runs.
+does not fix the run itself** — the `vale` target delegates to a separate
+script (`make-docs`) that re-detects the runtime independently
+(`make-docs:337` assigns `PODMAN` unconditionally rather than honouring an
+inherited value) and overwrites any inherited `PODMAN` value, every time it
+runs.
+
+**`PULL=false` removes one of the two places the error can fire — it is not
+a general fix.** The `vale` target invokes the runtime twice: once at the
+make level to pull the image (`docs.mk:95-98` runs
+`$(PODMAN) pull -q $(VALE_IMAGE)` only when `PULL` is `true`, its default
+per `docs.mk:61-62`), and again inside `make-docs`, which runs the container
+itself (`make-docs:846`, `make-docs:916`). `PULL=false` skips the first one:
+
+```bash
+cd /home/ccornell/git-repos/alloy/docs
+PULL=false VALE_MINALERTLEVEL=suggestion make vale
+```
+
+**This only helps when the failure is in the pull step**, and only when
+`grafana/vale:latest` is already cached locally. A genuinely broken Podman
+install still fails at the container run, because `make-docs` re-detects the
+runtime with its own unconditional assignment. Confirmed real:
+`PODMAN=docker PULL=false make vale` failed with the identical error on a
+machine where `docker` was independently working and `podman` was
+independently confirmed broken — see `references/PROVENANCE.md`. Treat
+`PULL=false` as one step in the sequence below, not as the answer.
 
 - **On first hitting the `Failed to obtain podman configuration ...
   read-only file system` error, retry `make vale` once, plain, with no
   override.** This signature can reflect a transient, stale
   rootless-Podman runtime state rather than a permanently broken install,
   and a bare retry has been observed to clear it.
+- **If a plain retry doesn't clear it, try `PULL=false`** (with
+  `VALE_MINALERTLEVEL=suggestion` still set). This helps only if the failure
+  was in the pull step; if the install itself is broken, expect the same
+  error again.
 - **If the person is available, asking them to run `make vale` themselves
   once in a plain terminal is also a valid way to clear a stale state** —
   a plain, unprivileged command, not a toolchain change, so it doesn't
   conflict with this skill's never-touch-the-toolchain principle.
-- **Only if the identical signature recurs after a plain retry** should
-  this be treated as a genuine, non-transient block. Report it as a
-  skipped check with the specific error, note that `PODMAN=docker` doesn't
-  apply here, and that a plain retry was attempted — then run the raw
-  local `vale` fallback with its `Grafana.Spelling` caveat.
+- **Only if the identical signature recurs after both a plain retry and
+  `PULL=false`** should this be treated as a genuine, non-transient block.
+  Report it as a skipped check with the specific error, note which overrides
+  were attempted — then run the raw local `vale` fallback with its
+  `Grafana.Spelling` caveat.
 - **Mention once, not every run**, that a genuinely broken install can be
   repaired directly (e.g., checking `XDG_RUNTIME_DIR` points somewhere
   writable, or running Podman's own repair/reset tooling) — this skill
@@ -98,7 +141,7 @@ output size or how long a response feels. Always:
 error, when run from a VS Code–managed terminal.** Terminal capture in that
 context can swallow output entirely, making a real failure look like
 nothing ran. Don't treat silent zero-output as a pass. Redirect explicitly
-instead of relying on terminal capture: `make vale 2>&1 | tee "$TMPDIR"/vale-out.txt`, then
+instead of relying on terminal capture: `VALE_MINALERTLEVEL=suggestion make vale 2>&1 | tee "$TMPDIR"/vale-out.txt`, then
 read the file directly and check the exit status separately if needed
 (`echo "EXIT: $?"` immediately after the command, before running anything
 else that would overwrite `$?`).
@@ -114,6 +157,35 @@ the repo. Distinguish "lint findings present" from "command couldn't run."
 Report every other Vale finding grouped by rule. Don't editorialize on rule
 violations — they're either violations of the `Grafana` style package or they
 aren't.
+
+## Filter out the generated compatible-components block
+
+**Every component reference page ends with a tool-generated block delimited
+by `<!-- START GENERATED COMPATIBLE COMPONENTS -->` and
+`<!-- END GENERATED COMPATIBLE COMPONENTS -->`. Nothing inside it is a
+finding, for any check, ever.** It's generated from the compatibility
+matrix, so a finding there is unactionable on the page — the only real fix
+would be in the generator.
+
+This matters most for Vale, because the block reliably produces the same
+hits on every component page — `Grafana.GooglePassive` on "be consumed" is
+the recurring one — and reporting them makes every component review look
+noisier than it is.
+
+**Filter by line range before reporting**, don't filter by eye:
+
+```bash
+F=docs/sources/reference/components/<path>.md
+START=$(grep -n 'START GENERATED COMPATIBLE COMPONENTS' "$F" | cut -d: -f1)
+END=$(grep -n 'END GENERATED COMPATIBLE COMPONENTS' "$F" | cut -d: -f1)
+```
+
+Then drop any finding whose line number falls between `$START` and `$END`.
+If the page has no such markers, there's nothing to filter.
+
+The same exclusion applies to the manual checks, not just Vale: single-item
+lists, link style, and passive voice inside the block are all out of scope.
+See `references/dont-flag.md`.
 
 ## Handling `Grafana.Spelling` findings specifically
 

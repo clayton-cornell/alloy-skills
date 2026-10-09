@@ -29,7 +29,8 @@ copies — the method was reimplemented for Alloy's specific checks).
 
 All other reference files (`source-mapping-*.md`, `accuracy-checklist-*.md`,
 `completeness-checklist-*.md`, `delta-pr-mode.md`, `batch-modes.md`,
-`additional-checks.md`) are Alloy-specific and original to this skill.
+`additional-checks.md`, `dont-flag.md`, `source-defects.md`) are
+Alloy-specific and original to this skill.
 
 **Re-sync policy**: if `docs-ai` or `writers-toolkit` update any of the
 copied files above, re-sync manually — there's no automated link between
@@ -116,6 +117,18 @@ because `make-docs` re-detects the runtime internally with a plain
 assignment that overwrites any inherited `PODMAN` value. This is why the
 rule is "retry once plain, no override" before treating it as a genuine
 block.
+
+**2026-10-09 — `PULL=false` reconciled, not promoted.** A later session
+recorded `PULL=false` as a reliable workaround and briefly wrote it into
+`style-consistency-vale.md` and `SKILL.md` as "the override that works."
+That overstated it and contradicted the confirmed failure above. Reconciled:
+`docs.mk:95-98` runs `$(PODMAN) pull -q $(VALE_IMAGE)` only when `PULL` is
+`true`, so `PULL=false` genuinely removes the pull as a failure site — but
+`make-docs` still runs the container itself (`make-docs:846`, `:916`) using
+its own re-detected runtime, so a broken install fails either way. Both
+files now describe it as one step in the retry sequence, conditional on the
+failure being in the pull step and on the image already being cached. Don't
+re-promote it to a general fix without new evidence.
 
 **`accuracy-checklist-other.md` — cluster messages are locally verifiable.**
 Prior versions of this file told every run to skip cluster-related log

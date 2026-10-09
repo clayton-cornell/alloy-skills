@@ -42,6 +42,33 @@ it. If the source can't be located (e.g., it's in a vendored external Go
 module, not this repo), flag it in the report's "Open questions" section
 rather than assuming correctness either way.
 
+### When reading source isn't enough: run the function
+
+Some claims depend on what a standard-library function actually does across
+realistic inputs, and reading the call site can't settle them. `url.Parse`
+is the recurring case — what ends up in an `instance` label depends on
+whether the input has a scheme, a port, userinfo, or multiple hosts, and the
+answers are not obvious.
+
+**Technique**: write a throwaway Go program in `$TMPDIR`, calling the same
+function the source calls, over the inputs the argument actually accepts.
+Print the results, read them, delete the file. Cheap and conclusive.
+
+This caught two real findings that source-reading alone had got wrong: a doc
+sentence that was false for one URI scheme and for multi-host values, and a
+confirmed source defect where scheme-less input produced an empty host and
+an `instance="unknown"` label on every target.
+
+Use it for any claim about `url.Parse`, an `InstanceKey()` derivation, or
+any other "what does this value look like at runtime" question. Two rules:
+the program must call the *same* function the source does, not a
+reimplementation of it, and it goes in `$TMPDIR` and gets deleted — never
+left in the repo.
+
+The same principle covers Go semantics that are easy to assert wrongly —
+for example, confirming that an empty-but-non-nil map doesn't compare equal
+to `nil`, which is the whole mechanism behind one confirmed source defect.
+
 ## 3. Report findings
 
 For each claim verified, note: the claim as written in the doc, what the

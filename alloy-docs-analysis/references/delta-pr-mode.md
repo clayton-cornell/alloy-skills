@@ -50,6 +50,34 @@ out-of-diff finding count is reported even when full detail is withheld.
    analyzed, is the unit of work" principle still applies) — don't merge
    findings from different pages into one combined report.
 
+## A moved or reformatted line is not in scope
+
+**Check whether the cell *value* changed, not whether the line changed.** A
+PR that reorders table rows, rewraps a paragraph, or restyles a link touches
+those lines without changing what they say. Treating them as "in the diff"
+and then correcting their content is out-of-scope editing wearing a
+delta-mode disguise.
+
+This has gone wrong three times on different PRs, always the same shape: a
+row the PR merely *moved* had a pre-existing error, the error was real, and
+fixing it inside the delta was still wrong. In one case the PR author had
+deliberately fixed one of two identically-broken rows; "finishing the job"
+on the second was an unrequested change to a line the PR hadn't semantically
+touched.
+
+So:
+
+- A pre-existing problem on a reformatted line is **reported as a follow-up**,
+  never corrected in place.
+- When a PR fixes one instance of a problem and leaves an identical sibling
+  untouched, that asymmetry is a finding to report, not a gap to close.
+- Pre-existing blank or placeholder cells on rows the PR didn't semantically
+  change stay as they are.
+
+**If you do propose an edit at the edge of delta scope, keep it in its own
+isolated change** rather than bundling it into a larger structural edit, so
+it can be accepted or rejected on its own.
+
 ## What genuinely can't be delta-scoped
 
 If given only a raw text fragment with no way to locate or read the full

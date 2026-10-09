@@ -219,12 +219,22 @@ without waiting for the final report.
      surface as "missing" in this upfront check at all. This upfront check
      is a presence check only; the actual working-or-not determination
      happens when Step 5 (via `references/style-consistency-vale.md`) actually
-     runs `make vale`. **Confirmed behavior, not just theory**: if
+     runs `make vale`. **Always invoke it as `VALE_MINALERTLEVEL=suggestion
+     make vale`, never bare `make vale`** — confirmed real, high-impact gap:
+     the bare command defaults to `error`-only and silently suppresses every
+     `suggestion`/`warning`-level rule (`Grafana.GoogleWill`,
+     `Grafana.GooglePassive`, `Grafana.Acronyms`, all `Grafana.Readability*`
+     metrics used by Step 2), while CI's actual check doesn't apply this
+     restriction — see `references/style-consistency-vale.md` for the full
+     writeup. **Confirmed behavior, not just theory**: if
      `make vale` hits a Podman-specific error (e.g. "Failed to obtain
      podman configuration"/read-only filesystem), a `PODMAN=docker`
-     override does NOT reliably fix it — the `make-docs` script `make vale`
-     delegates to re-detects the runtime internally and overrides any
-     inherited `PODMAN` value on its own. However, this same error
+     override does NOT fix the container run — the `make-docs` script
+     `make vale` delegates to re-detects the runtime internally and
+     overrides any inherited `PODMAN` value on its own. **`PULL=false`
+     skips the make-level image pull**, which removes one of the two places
+     the error can fire, but it does not fix a genuinely broken Podman
+     install — `make-docs` still runs the container itself. This same error
      signature has also been confirmed to sometimes be a transient, stale
      Podman runtime state rather than a permanent break, clearable by a
      plain retry (no override) or a clean `make vale` run elsewhere on the
@@ -246,8 +256,16 @@ without waiting for the final report.
 Summarize, in your own words:
 - What the topic covers and what it explicitly says it does NOT cover.
 - Its structure (heading hierarchy). For component reference pages, check
-  against the standard shape (name/description, arguments, blocks, exported
-  fields, component health, debug info, examples). For task-style pages
+  against the nine required sections from `docs/developer/writing-component-documentation.md`'s
+  "Page structure" (Title, Usage, Arguments, Blocks, Exported fields,
+  Component health, Debug information, Debug metrics, Examples) — a
+  component page can have more sections than these, never fewer, and a
+  section that doesn't apply to the component must still appear with its
+  documented boilerplate "doesn't expose/support..." sentence rather than
+  being omitted. Note which required sections are missing here; Step 4
+  reports any missing section as a completeness gap, per
+  `references/completeness-checklist-components.md`'s "Required section
+  presence" check. For task-style pages
   (`set-up/install/*`, `set-up/run/*`, `configure/*`, `collect/*`,
   `monitor/*`), name which family the page belongs to and its typical shape
   — see `references/style-guide.md`'s "Alloy-specific note on the Task
@@ -324,11 +342,26 @@ change's migration guidance missing from the doc).
 Every discrepancy you report must cite the exact doc line and the exact
 source line/file it contradicts — no discrepancy without both sides shown.
 
+**When the doc is right and the code is wrong**, stop treating it as an
+accuracy issue: there's no doc edit that makes the page both true and
+useful. Read `references/source-defects.md` for the verification bar a
+defect claim has to clear, the three doc dispositions to offer (leave it,
+describe current behavior with a recorded revert condition, or keep a doc
+guard that prevents users hitting the bug), the classes of source problem
+that aren't worth reporting at all, and the GenAI-policy boundary on what
+you may and may not write about it. These findings get their own
+`## Source defects` output section, separate from accuracy issues.
+
 ## Step 4: Completeness vs. source
 
 Walk the source package's exported config struct(s) and find anything NOT
 documented: missing attributes, missing blocks, missing exported fields, new
-enum values, undocumented deprecations. See
+enum values, undocumented deprecations. For component reference pages, also
+check that all nine required sections from Step 1 are actually present —
+see `references/completeness-checklist-components.md`'s "Required section
+presence" check, which enforces `docs/developer/writing-component-documentation.md`'s
+page-structure rule (every section present, even a boilerplate one-liner
+for an inapplicable section, is non-negotiable, not just a style nit). See
 `references/completeness-checklist-components.md` for component reference
 pages, `references/completeness-checklist-cli.md` for `reference/cli/*`
 pages, `references/completeness-checklist-syntax.md` for
@@ -389,8 +422,20 @@ six sub-files, one per check group below:
    terms — and, for component reference pages, a parameter table format
    check: Arguments/Blocks tables follow one exact, rigid column shape
    every time, and a confirmed row-order convention (required rows first,
-   each group alphabetized), not a loose "prefer tables" suggestion. Full
-   method: `references/style-consistency-manual-checklist.md`.
+   each group alphabetized), not a loose "prefer tables" suggestion.
+   **Check row order on every Arguments/Blocks table, every run — don't
+   skip it because the table "looks fine" at a glance.** Confirmed real
+   miss: an earlier pass over `pyroscope.ebpf.md` documented this rule but
+   didn't apply it, both to a newly-added block's argument table and to the
+   page's pre-existing Arguments table (which had drifted out of order as
+   fields were appended over time instead of inserted alphabetically) —
+   the rule existed in this reference file the whole time; the run simply
+   didn't read this file far enough to reach it. Full method:
+   `references/style-consistency-manual-checklist.md`.
+   Before reporting anything from this group, filter it against
+   `references/dont-flag.md` — a consolidated list of finding classes that
+   were raised in real reviews and explicitly declined, including everything
+   inside the generated compatible-components block.
 3. Frontmatter presence/enum-validity check (`labels.stage`, `labels.products`)
    plus the three-way stability cross-check against Step 3's source finding.
    Full method: `references/style-consistency-frontmatter.md`.
@@ -437,7 +482,11 @@ six sub-files, one per check group below:
    If fewer than 2 real siblings exist to compare against (a genuinely
    unique page, or a very small family), say so explicitly rather than
    asserting a "convention" from a single example — one data point isn't a
-   pattern. Full method: `references/style-consistency-cascade-vars.md`.
+   pattern. **When the work is split across several open branches, read
+   each sibling from the branch that owns it (`git show <branch>:<path>`),
+   not from the working tree** — see "Reading sibling topics for
+   comparison" in `references/style-consistency-manual-checklist.md`. Full
+   method: `references/style-consistency-cascade-vars.md`.
 
 Report automated findings (Vale/`make vale` rule violations, including the
 `Grafana.Spelling` typo-vs-dictionary-gap split) separately from every other
@@ -489,6 +538,14 @@ X–Y); N additional pre-existing findings exist outside this diff")
 
 ## Accuracy issues
 (table or list: doc claim | source reality | file:line citation for both | proposed fix)
+
+## Source defects
+(omit this section entirely when there are none. One entry per defect:
+component | argument/metric/behavior affected | root cause with file:line per
+hop | the doc disposition chosen and its revert condition | confidence,
+naming what was verified against source versus inferred. See
+`references/source-defects.md` — these are not doc fixes, so don't fold them
+into Accuracy issues)
 
 ## Completeness gaps
 (table or list: what's missing | where it lives in source | suggested doc location | proposed text)
@@ -603,3 +660,24 @@ This skill reuses several files from `docs-ai/skills/` and `writers-toolkit/`
 file-access sandboxing makes live cross-repo relative paths unreliable) and
 has gone through file-split passes to keep per-run reads scoped to what a
 given topic actually needs.
+
+This skill also reads `docs/developer/writing-component-documentation.md`
+directly (it's in-repo, so no copy needed) as the authoritative source for
+the component reference page's required section list and per-section
+conventions — see Step 1 and `references/completeness-checklist-components.md`'s
+"Required section presence" check.
+
+Two reference files are derived from accumulated review experience rather
+than from an upstream document, and both encode decisions a person made in a
+real review rather than rules invented here:
+
+- `references/dont-flag.md` — finding classes raised and explicitly
+  declined. Read it before writing the report; re-raising any of them is
+  noise, and so is mentioning them as an aside.
+- `references/source-defects.md` — how to verify, classify, and hand off a
+  defect in the code rather than the doc, including Alloy's GenAI-policy
+  boundary on issue and PR text.
+
+Both deliberately exclude project state that changes between efforts —
+branch topology, which PR carries which topic, and which pages are currently
+in scope. Ask for that; don't bake it into the skill.

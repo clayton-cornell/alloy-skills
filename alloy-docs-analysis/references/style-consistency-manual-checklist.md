@@ -66,7 +66,14 @@ that file:
 
 All of the above except lazy numbering already run automatically via
 `make vale` (see `references/style-consistency-vale.md`) when Docker/Podman
-is available, though the body-prose gerund rule is a house-rule addition
+is available **and `VALE_MINALERTLEVEL=suggestion` is set explicitly** —
+most of these are `suggestion`-level rules (`GooglePassive.yml`,
+`GoogleSemicolons.yml`, `AndOr.yml` at `warning`), and the bare `make vale`
+default (`error`-only) silently produces none of them, confirmed real per
+`references/style-consistency-vale.md`. Don't treat a clean bare `make vale`
+run as clearance for these — confirm `VALE_MINALERTLEVEL=suggestion` was
+actually set for this run before trusting a "no findings" result here.
+Though the body-prose gerund rule is a house-rule addition
 beyond what Vale's own `Gerunds.yml` covers — this manual-checklist version
 exists for the fallback case (no Docker/Podman), as the only check at all
 for lazy numbering, and as an explicit, documented reminder of each rule's
@@ -127,6 +134,25 @@ these were genuinely missing:
   adding the missing periods (or, if a sibling list on the same page already
   omits periods, propose consistently matching that instead — the rule is
   about internal consistency as much as periods themselves).
+- **Bullet marker character: dash (`-`), never asterisk (`*`).** Distinct
+  from the capitalization/period checks above — this is about the literal
+  marker character starting each unordered list item, which no Vale rule
+  checks (Vale is marker-agnostic; both render identically, so this can
+  only be caught by reading the raw Markdown source). `.docs/agent/style.md`
+  states this directly ("Use dashes for unordered lists"), and it's the
+  convention actively being applied in the ongoing "docs: Validate the
+  `<X>.*` component topics" PR series — confirmed directly in
+  [PR #7097](https://github.com/grafana/alloy/pull/7097/files), which
+  converts every `*`-bullet list to `-` across `remote.http.md`,
+  `remote.kubernetes.configmap.md`, `remote.kubernetes.secret.md`, and
+  `remote.s3.md` with no other content change on those lines. **Confirmed
+  real instance**: `pyroscope.ebpf.md` had ~65 lines using `*` throughout
+  (Debug information, Debug metrics, Targets, Service name, Troubleshoot
+  unknown symbols, and both "Replace the following" lists) before being
+  corrected. Check every unordered list in the topic for `*` markers and
+  propose converting them to `-`; a topic that mixes both markers in
+  different sections is exactly as much a finding as a topic using `*`
+  consistently throughout — flag both.
 - **Sort lists alphabetically, unless order matters**: e.g. a sequence of
   steps or a priority-ordered list is exempt, but a list of independent
   named items (components, flags, options with no inherent sequence) should
@@ -286,6 +312,25 @@ ideas below.
   `{{< docs/alloy-config >}}` / `{{< /docs/alloy-config >}}` (see
   `references/shortcode-schema.md`'s entry for this shortcode).
 
+**The `>`-nesting explanation paragraph is obsolete, not missing, when the
+Blocks table is wrapped in `docs/alloy-config`.** `docs/developer/writing-component-documentation.md`
+still documents a paragraph explaining what the `>` symbol means ("The `>`
+symbol indicates deeper levels of nesting...") as required whenever a
+Blocks table uses `>` nesting. Confirmed via maintainer clarification:
+this is superseded by the `docs/alloy-config` shortcode, which renders the
+Blocks table as a collapsible tree in the published site and drops the
+literal `>` characters from the rendered output entirely — the `>` syntax
+is still required in the Markdown source (that's how the shortcode parses
+hierarchy), but the explanatory paragraph about what `>` means no longer
+matches what a reader actually sees. **Check for the paragraph's absence,
+not its presence**, on any page whose Blocks table is wrapped in
+`docs/alloy-config` (true for nearly every component reference page — see
+`references/shortcode-schema.md`). If the paragraph IS present alongside a
+`docs/alloy-config`-wrapped table, that's the real finding — propose
+removing it as a stale artifact, not adding it elsewhere. Confirmed real
+instance: `otelcol.processor.redaction.md` has both the
+`docs/alloy-config` wrap and this now-redundant paragraph (lines ~84-109).
+
 **What to flag**: an Arguments or Blocks section that describes fields in
 prose or a bulleted list instead of the table, a table missing one of the
 required columns, or a Blocks table not wrapped in `docs/alloy-config`.
@@ -303,3 +348,35 @@ then `conditions, error_mode` optional-alphabetized). Flag a table that
 breaks this order (an optional row before a required one, or either group
 out of alphabetical order) and propose the corrected row order — this is a
 distinct finding from column shape, and both can be checked independently.
+
+## Reading sibling topics for comparison
+
+**When a documentation effort is split across several open branches, read
+siblings from the branch that owns them, not from the working tree.** The
+checked-out branch carries stale copies of every topic corrected on a
+different branch, and comparing against those manufactures false
+"that isn't a convention" conclusions.
+
+```bash
+git show <branch>:docs/sources/reference/components/<path>.md
+```
+
+Use that, not a working-tree file read, for every sibling you compare
+against. Confirmed real: one stale sibling copy — missing a convention
+already applied on its own branch — flipped three separate findings in a
+single review.
+
+Two corollaries:
+
+- **A topic appearing on a later branch is not automatically newer.** Later
+  branches are usually cut from the default branch and never pick up earlier
+  branches' unmerged corrections.
+- **Don't infer merge state from ancestry.**
+  `git merge-base --is-ancestor <branch> main` is false for a squash merge
+  even when the content is fully in `main`. Compare content instead:
+  `diff <(git show main:PATH) <(git show BRANCH:PATH)`.
+
+If you can't establish which branch owns a sibling, say so and treat the
+comparison as unverified rather than asserting a convention from a possibly
+stale file. Ask which branches are in play rather than guessing — this skill
+doesn't carry a branch map, and shouldn't.

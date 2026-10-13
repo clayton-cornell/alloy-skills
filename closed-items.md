@@ -22,7 +22,7 @@ An item moves here when its fix has merged, or when it turned out to need no sou
 
 ### Not moved here, and why
 
-- **Appendix of docs-only fixes in [overview.md](overview.md):** left where it is. It mixes resolved rows with rows that are unfixed or awaiting sign-off, so it was not moved wholesale. Individual resolved rows can be moved on request.
+- **Appendix rows that are still unresolved** stay in the appendix of [overview.md](overview.md). Resolved appendix rows are in [Docs-only fixes](#docs-only-fixes-from-the-overview-appendix) below.
 
 ---
 
@@ -69,7 +69,26 @@ An item moves here when its fix has merged, or when it turned out to need no sou
 
 ---
 
+## Docs-only fixes (from the overview appendix)
+
+Doc errors the audit found that are now corrected. Not numbered items, so they have no pointer line in [overview.md](overview.md), which notes only that these rows moved.
+
+**Checked 2026-10-13 against the `alloy` working tree** on branch `docs/correct-minor-errors-component-docs` (cut from `main`). "Present at HEAD" means the corrected text is in that tree. It does not show whether it reached release branches.
+
+| Component | Issue | Fix | Verified at HEAD |
+|---|---|---|---|
+| `prometheus.exporter.cadvisor` | `disabled_metrics` documented `[]`, but when the argument is omitted the integration subtracts a built-in disabled set from `AllMetrics`, so the effective default is not empty. Previously tracked as L6. | Doc fix on part 02. The Default cell reads `_see below_`, matching `prometheus.exporter.unix`, `.windows` and `.oracledb`. It was briefly changed to `[]`, caught as a regression, and restored. Not a code defect. Do not confuse with item 11, which is still open. | Default cell is `_see below_` (`prometheus.exporter.cadvisor.md:133`). |
+| `remote.vault` | `auth.azure` `resource_url` and `auth.kubernetes` `service_account_file` defaults were missing from their tables. | Doc fix. Values read from [auth.go][auth.go]: `DefaultAuthAzure.ResourceURL = "https://management.azure.com/"` and `AuthKubernetes.ServiceAccountTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"`. | Both defaults present (`remote.vault.md:142`, `:195`) and match the source (`auth.go:231`, `:342`). The earlier note that reviewer sign-off was outstanding was not rechecked. |
+| `remote.vault` | The doc named `AWS_SESSION`; the AWS SDK uses `AWS_SESSION_TOKEN`. Previously tracked as L4. | Resolved. [auth.go][auth.go] contains no `AWS_` environment reads at all. It delegates to `hashicorp/vault/api/auth/aws`, which uses the SDK credential chain. The vendored SDK was not traced. | Line 109 reads `AWS_SESSION_TOKEN`. `auth.go` has no `AWS_` matches. |
+| `remote.kubernetes.secret` | The example wrapped a ConfigMap value in `convert.nonsensitive()` that was never secret. | Doc fix. The example was restructured so the Secret holds both `username` and `password`, and `convert.nonsensitive` is demonstrated on `username` where it is genuinely needed. Validated with `alloy validate`, exit 0 (earlier run). | Example uses `convert.nonsensitive` on `username` only (`remote.kubernetes.secret.md:173-174`). `alloy validate` not re-run. |
+| `pyroscope.scrape` | `scrape_timeout` default documented as `"18s"`, and a "Must be larger than `scrape_interval`" constraint that does not exist in source. | Doc fix. Corrected to `"10s"` and the invented constraint removed. This is the corroboration behind item 7, which is still open. | Default is `"10s"` with no such constraint (`pyroscope.scrape.md:75`). |
+| `prometheus.enrich` | Debug metrics table named `prometheus_target_cache_size`; the registered metric is `alloy_prometheus_target_cache_size` (`enrich.go:153`). `prometheus_fanout_latency` and `prometheus_forwarded_samples_total` are correct. They come from the shared `Fanout` type and carry no `alloy_` prefix. | Doc fix. | Table reads `alloy_prometheus_target_cache_size` (`prometheus.enrich.md:89`). The other two names are unchanged and correct. |
+| `pyroscope.java` | On the `threads_fix` branch, the `otel.scope.name` and `otel.scope.version` auto-injected labels table was deleted while the code behaviour was unchanged. | Doc regression flagged for restoration before merge. | Table is present (`pyroscope.java.md:124-125`). Whether `threads_fix` merged is unknown and no longer matters for this row. |
+
+---
+
 [grafana/alloy]: https://github.com/grafana/alloy
+[auth.go]: https://github.com/grafana/alloy/blob/main/internal/component/remote/vault/auth.go
 [#7099]: https://github.com/grafana/alloy/pull/7099
 [#7119]: https://github.com/grafana/alloy/pull/7119
 [#7111]: https://github.com/grafana/alloy/pull/7111

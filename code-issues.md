@@ -6,26 +6,26 @@ Companion to: [overview.md](overview.md) (the audit catalog) and [closed-items.m
 
 Possible source bugs the docs audit surfaced, written up for discussion with the dev team. Each entry states the problem, where to look and a possible fix. It is not a full analysis: the developer who picks it up will do the deep dive.
 
-Item numbers match [overview.md](overview.md). An item gets an entry here only after it has been checked against the source and judged to be a real issue. "Not run" means the behaviour was read from the code, not reproduced by running Alloy.
+Issues are numbered in this file only. The index shows the matching item in [overview.md](overview.md). An issue gets an entry here only after it has been checked against the source and judged to be a real issue. "Not run" means the behaviour was read from the code, not reproduced by running Alloy.
 
 ## Index
 
-| Item | Component | Issue | Severity | Reproduced |
-|---|---|---|---|---|
-| [1](#item-1-prometheusexporterkafka-instance-ignored-with-one-uri-kafka_uris-not-validated) | `prometheus.exporter.kafka` | `instance` is ignored when there is one URI; `kafka_uris` is required but tagged optional | Low | Not run |
-| [2](#item-2-prometheusexportermongodb-enable_profile-has-no-effect) | `prometheus.exporter.mongodb` | `enable_profile = true` does not produce profile metrics | Medium | Not run; upstream condition unconfirmed |
-| [3](#item-3-prometheusexportermssql-connection_name-never-becomes-a-metric-label) | `prometheus.exporter.mssql` | `connection_name` enables the `up` and scrape-duration metrics but never becomes a label | Low | Not run; pinned library commit unconfirmed |
-| [4](#item-4-prometheusexportercloudwatch-static-block-accepts-period-length-and-delay-but-ignores-them) | `prometheus.exporter.cloudwatch` | `static` block accepts `period`, `length` and `delay` but ignores them | Low | Not run; pinned YACE version unconfirmed |
-| [8](#item-8-prometheusexporterconsul-server-without-a-scheme-gives-instance-the-value-unknown) | `prometheus.exporter.consul` | A `server` address without a scheme sets `instance` to `unknown` | Medium | Not run; Go parsing behaviour from documentation |
-| [9](#item-9-prometheusexportergithub-github_rate_limit-has-no-alloy-default-so-github-app-re-auth-never-triggers) | `prometheus.exporter.github` | `github_rate_limit` defaults to `0` instead of `15000`, so GitHub App re-authentication never triggers | Medium | Not run; upstream code path not read |
-| [10](#item-10-prometheusexportergithub-a-partial-github-app-configuration-is-silently-ignored) | `prometheus.exporter.github` | Setting only some of the three GitHub App arguments is silently ignored | Low | Not run |
-| [12](#item-12-prometheusecho-an-unknown-format-is-accepted-and-falls-back-to-text) | `prometheus.echo` | An unknown `format` is accepted and falls back to `text` | Low | Not run |
+| # | Overview item | Component | Problem | Severity | Reproduced |
+|---|---|---|---|---|---|
+| [1](#issue-1-prometheusexporterkafka-instance-ignored-with-one-uri-kafka_uris-not-validated) | 1 | `prometheus.exporter.kafka` | `instance` is ignored when there is one URI; `kafka_uris` is required but tagged optional | Low | Not run |
+| [2](#issue-2-prometheusexportermongodb-enable_profile-has-no-effect) | 2 | `prometheus.exporter.mongodb` | `enable_profile = true` does not produce profile metrics | Medium | Not run; upstream condition unconfirmed |
+| [3](#issue-3-prometheusexportermssql-connection_name-never-becomes-a-metric-label) | 3 | `prometheus.exporter.mssql` | `connection_name` enables the `up` and scrape-duration metrics but never becomes a label | Low | Not run; pinned library commit unconfirmed |
+| [4](#issue-4-prometheusexportercloudwatch-static-block-accepts-period-length-and-delay-but-ignores-them) | 4 | `prometheus.exporter.cloudwatch` | `static` block accepts `period`, `length` and `delay` but ignores them | Low | Not run; pinned YACE version unconfirmed |
+| [5](#issue-5-prometheusexporterconsul-server-without-a-scheme-gives-instance-the-value-unknown) | 8 | `prometheus.exporter.consul` | A `server` address without a scheme sets `instance` to `unknown` | Medium | Not run; Go parsing behaviour from documentation |
+| [6](#issue-6-prometheusexportergithub-github_rate_limit-has-no-alloy-default-so-github-app-re-auth-never-triggers) | 9 | `prometheus.exporter.github` | `github_rate_limit` defaults to `0` instead of `15000`, so GitHub App re-authentication never triggers | Medium | Not run; upstream code path not read |
+| [7](#issue-7-prometheusexportergithub-a-partial-github-app-configuration-is-silently-ignored) | 10 | `prometheus.exporter.github` | Setting only some of the three GitHub App arguments is silently ignored | Low | Not run |
+| [8](#issue-8-prometheusecho-an-unknown-format-is-accepted-and-falls-back-to-text) | 12 | `prometheus.echo` | An unknown `format` is accepted and falls back to `text` | Low | Not run |
 
 ---
 
-## Items
+## Issues
 
-### Item 1: `prometheus.exporter.kafka`: `instance` ignored with one URI; `kafka_uris` not validated
+### Issue 1: `prometheus.exporter.kafka`: `instance` ignored with one URI; `kafka_uris` not validated
 
 **A. `instance` is silently ignored when `kafka_uris` has exactly one entry**
 - **What happens:** the `instance` label is always the first URI, whatever `instance` is set to. With two or more URIs, `instance` is required and is used.
@@ -49,7 +49,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 2: `prometheus.exporter.mongodb`: `enable_profile` has no effect
+### Issue 2: `prometheus.exporter.mongodb`: `enable_profile` has no effect
 
 - **What happens:** setting `enable_profile = true` should add profile metrics. From the code it does not, and there is no warning.
 - **Why (high level):** the upstream exporter only collects profile metrics when its `ProfileTimeTS` option is non-zero. Alloy never sets that option, so it stays `0`.
@@ -65,7 +65,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 3: `prometheus.exporter.mssql`: `connection_name` never becomes a metric label
+### Issue 3: `prometheus.exporter.mssql`: `connection_name` never becomes a metric label
 
 - **What happens:** the reference doc says `connection_name` is "used as a label in uptime metrics". From the code, a non-empty name makes the exporter emit the synthetic `up` and `scrape_duration_seconds` metrics (they are skipped when the name is empty, which is the default) and adds the name to log messages. It does not add a label.
 - **Why (high level):** Alloy passes the name plus an empty but non-nil `prometheus.Labels{}` to `sql_exporter.NewTarget`. The library only builds the target label from the name when that map is `nil`, so with a non-nil map no label is created.
@@ -83,7 +83,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 4: `prometheus.exporter.cloudwatch`: `static` block accepts `period`, `length` and `delay` but ignores them
+### Issue 4: `prometheus.exporter.cloudwatch`: `static` block accepts `period`, `length` and `delay` but ignores them
 
 - **What happens:** a `static` block accepts `period`, `length` and `delay` without an error or warning, and they have no effect. The same three attributes do work on `discovery` and `custom_namespace` blocks. `period` and `length` set inside a `metric` block still work.
 - **Why (high level):** the conversion for static jobs never reads the job-level values. It calls `toYACEMetrics(sj.Metrics, 0, 0)`, while the discovery and custom-namespace conversions pass their job values through. The YACE `Static` type has no job-level fields to carry them, at least at the version checked.
@@ -100,7 +100,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 8: `prometheus.exporter.consul`: `server` without a scheme gives `instance` the value `unknown`
+### Issue 5: `prometheus.exporter.consul`: `server` without a scheme gives `instance` the value `unknown`
 
 - **What happens:** with `server = "localhost:8500"` (no `http://`), every target from the component gets `instance="unknown"`. The exporter still connects, so metrics flow, but the label is wrong. The reference doc uses `localhost:8500` as an example address, and the default is `"http://localhost:8500"`.
 - **Why (high level):** the instance label comes from `url.Parse(server).Host`. Go parses `host:port` without a scheme as scheme `host` and opaque `port`, so `Host` is empty. The empty key then hits the generic fallback that substitutes `unknown`.
@@ -118,7 +118,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 9: `prometheus.exporter.github`: `github_rate_limit` has no Alloy default, so GitHub App re-auth never triggers
+### Issue 6: `prometheus.exporter.github`: `github_rate_limit` has no Alloy default, so GitHub App re-auth never triggers
 
 - **What happens:** when `github_rate_limit` is not set, Alloy passes `0`, not the intended default of `15000`. This threshold is what makes the exporter fetch a new GitHub App token when the remaining rate limit gets low. With `0` that condition can never be met, so the token is not refreshed unless the user sets the argument explicitly.
 - **Why (high level):** the component's `DefaultArguments` only sets `api_url`. The static-mode config gets `15000` from `DefaultConfig` through `UnmarshalYAML`. The Alloy component path does not, so the field keeps its zero value.
@@ -134,7 +134,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 10: `prometheus.exporter.github`: a partial GitHub App configuration is silently ignored
+### Issue 7: `prometheus.exporter.github`: a partial GitHub App configuration is silently ignored
 
 - **What happens:** GitHub App authentication only turns on when all three of `github_app_id`, `github_app_installation_id` and `github_app_key_path` are set. If only one or two are set, there is no error and no log message:
   - with no token, the exporter starts unauthenticated and gets GitHub's low unauthenticated rate limit;
@@ -151,7 +151,7 @@ Item numbers match [overview.md](overview.md). An item gets an entry here only a
 
 ---
 
-### Item 12: `prometheus.echo`: an unknown `format` is accepted and falls back to `text`
+### Issue 8: `prometheus.echo`: an unknown `format` is accepted and falls back to `text`
 
 - **What happens:** `format` accepts any string. Anything other than `text`, `openmetrics` or empty is accepted without an error, the component stays healthy, and each time metrics are committed it logs `unknown format, using text` and writes text output.
 - **Why (high level):** nothing validates the value. `Update()` stores the arguments and always returns `nil`, `New()` only fails if `Update()` fails, and the component has no `Validate()`. The output code has an explicit `default` branch that warns and uses text.

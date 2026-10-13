@@ -29,22 +29,22 @@ Of the 16 numbered items, 8 are open code issues, 3 are fixed, 3 turned out not 
 
 ## 2. Items
 
-Item numbers are stable. Each verdict links to its details.
+Item numbers are stable and match [closed-items.md](closed-items.md). [code-issues.md](code-issues.md) numbers its issues separately, and its index maps them to these items. Each verdict links to its details.
 
 | Item | Component | Issue | Verdict |
 |---|---|---|---|
-| 1 | `prometheus.exporter.kafka` | `instance` is ignored when there is one URI; `kafka_uris` is required but tagged optional | [Real, low](code-issues.md#item-1-prometheusexporterkafka-instance-ignored-with-one-uri-kafka_uris-not-validated) |
-| 2 | `prometheus.exporter.mongodb` | `enable_profile` has no effect | [Real, medium](code-issues.md#item-2-prometheusexportermongodb-enable_profile-has-no-effect) |
-| 3 | `prometheus.exporter.mssql` | `connection_name` enables `up` and scrape-duration metrics but never becomes a label | [Real, low](code-issues.md#item-3-prometheusexportermssql-connection_name-never-becomes-a-metric-label) |
-| 4 | `prometheus.exporter.cloudwatch` | `static` block accepts `period`, `length` and `delay` but ignores them | [Real, low](code-issues.md#item-4-prometheusexportercloudwatch-static-block-accepts-period-length-and-delay-but-ignores-them) |
+| 1 | `prometheus.exporter.kafka` | `instance` is ignored when there is one URI; `kafka_uris` is required but tagged optional | [Real, low](code-issues.md#issue-1-prometheusexporterkafka-instance-ignored-with-one-uri-kafka_uris-not-validated) |
+| 2 | `prometheus.exporter.mongodb` | `enable_profile` has no effect | [Real, medium](code-issues.md#issue-2-prometheusexportermongodb-enable_profile-has-no-effect) |
+| 3 | `prometheus.exporter.mssql` | `connection_name` enables `up` and scrape-duration metrics but never becomes a label | [Real, low](code-issues.md#issue-3-prometheusexportermssql-connection_name-never-becomes-a-metric-label) |
+| 4 | `prometheus.exporter.cloudwatch` | `static` block accepts `period`, `length` and `delay` but ignores them | [Real, low](code-issues.md#issue-4-prometheusexportercloudwatch-static-block-accepts-period-length-and-delay-but-ignores-them) |
 | 5 | `prometheus.exporter.catchpoint` | Component did not function | [Fixed](closed-items.md#item-5-prometheusexportercatchpoint-non-functional-component-removed) (removed, [#7309]) |
 | 6 | `pyroscope.ebpf` | `pyroscope_ebpf_pprof_samples_total` counted bytes | [Fixed](closed-items.md#item-6-pyroscopeebpf-pyroscope_ebpf_pprof_samples_total-counts-bytes) ([#7119]) |
 | 7 | `pyroscope.scrape` | Default `scrape_timeout` shorter than the default CPU profile | [Not a bug](closed-items.md#item-7-pyroscopescrape-default-scrape_timeout-shorter-than-the-default-cpu-profile-duration--not-a-bug) |
-| 8 | `prometheus.exporter.consul` | A `server` address without a scheme sets `instance` to `unknown` | [Real, medium](code-issues.md#item-8-prometheusexporterconsul-server-without-a-scheme-gives-instance-the-value-unknown) |
-| 9 | `prometheus.exporter.github` | `github_rate_limit` defaults to `0`, so GitHub App re-auth never triggers | [Real, medium](code-issues.md#item-9-prometheusexportergithub-github_rate_limit-has-no-alloy-default-so-github-app-re-auth-never-triggers) |
-| 10 | `prometheus.exporter.github` | A partial GitHub App configuration is silently ignored | [Real, low](code-issues.md#item-10-prometheusexportergithub-a-partial-github-app-configuration-is-silently-ignored) |
+| 8 | `prometheus.exporter.consul` | A `server` address without a scheme sets `instance` to `unknown` | [Real, medium](code-issues.md#issue-5-prometheusexporterconsul-server-without-a-scheme-gives-instance-the-value-unknown) |
+| 9 | `prometheus.exporter.github` | `github_rate_limit` defaults to `0`, so GitHub App re-auth never triggers | [Real, medium](code-issues.md#issue-6-prometheusexportergithub-github_rate_limit-has-no-alloy-default-so-github-app-re-auth-never-triggers) |
+| 10 | `prometheus.exporter.github` | A partial GitHub App configuration is silently ignored | [Real, low](code-issues.md#issue-7-prometheusexportergithub-a-partial-github-app-configuration-is-silently-ignored) |
 | 11 | `prometheus.exporter.cadvisor` | `allowlisted_container_labels` is `[""]` in code, `[]` in the doc | [Not a bug](closed-items.md#item-11-prometheusexportercadvisor-allowlisted_container_labels-default--not-a-bug) |
-| 12 | `prometheus.echo` | An unknown `format` is accepted and falls back to `text` | [Possible issue, low](code-issues.md#item-12-prometheusecho-an-unknown-format-is-accepted-and-falls-back-to-text), needs a dev decision |
+| 12 | `prometheus.echo` | An unknown `format` is accepted and falls back to `text` | [Possible issue, low](code-issues.md#issue-8-prometheusecho-an-unknown-format-is-accepted-and-falls-back-to-text), needs a dev decision |
 | 13 | `pyroscope.ebpf` | `## Debug information` documented output the component can't produce | [Fixed](closed-items.md#item-13-pyroscopeebpf-documented-debug-information-capability-is-not-implemented) (doc fix) |
 | 14 | `pyroscope.java` | `thread` block does nothing when `frame` and `label_name` are unset | [Not applicable](closed-items.md#item-14-pyroscopejava-thread-block-silently-no-ops-when-both-frame-and-label_name-are-unset--not-applicable) (block not in the tree) |
 | 15 | Shared `oauth2` block | `signature_algorithm` is validated under the wrong grant type | [Pre-merge finding](#3-pre-merge-review-findings), unmerged branch |

@@ -2,13 +2,13 @@
 
 Compiled: 2026-10-13
 Repo: [grafana/alloy]
-Companion to: [overview.md](overview.md), the code-side defect catalog of open items and open questions.
+Companion to: [overview.md](overview.md), the audit overview.
 
 This file indexes items from the audit that are **fixed or closed** and need no further developer action. Each entry keeps the full evidence from the original catalog entry, so an item can be reopened or cited without going back to the overview. Original item numbers are kept so earlier cross-references still resolve.
 
 An item moves here when its fix has merged, or when it turned out to need no source change and the doc fix is done. Where a fix exists but is not yet merged, the status says so.
 
-**When an item moves here, leave a one-line pointer in [overview.md](overview.md)** at the item's original position: `**Item N:** [Fixed](closed-items.md#anchor)`. Nothing else on the line. The word "Fixed" is the link to the entry below (use the anchor shown in the Index table), and all details, including any caveat such as a PR that has not merged yet, go in the entry here.
+**When an item moves here, update its row in the Items table in [overview.md](overview.md):** the Verdict cell becomes a link to the entry below, for example `[Fixed](closed-items.md#anchor)` (use the anchor shown in the Index table). All details, including any caveat such as a PR that has not merged yet, go in the entry here.
 
 ---
 
@@ -18,7 +18,7 @@ An item moves here when its fix has merged, or when it turned out to need no sou
 |---|---|---|---|---|---|---|---|
 | [5](#item-5-prometheusexportercatchpoint-non-functional-component-removed) | `prometheus.exporter.catchpoint` | Component did not function: the webhook listener was never started | Non-functional component (source defect) | Component removed | [#7309] (removal); audit finding in [#7111], backport [#7266] | Closed. Merged 2026-10-13 (reported by the author; not independently checked). | Whether the removal is backported to a release branch is unknown. |
 | [6](#item-6-pyroscopeebpf-pyroscope_ebpf_pprof_samples_total-counts-bytes) | `pyroscope.ebpf` | `pyroscope_ebpf_pprof_samples_total` counted bytes, not samples | Wrong metric (source defect) | Source fix | [#7119] (fix); [#7099] (found in); [#7124] (backport of #7099 to `release/v1.19`) | Closed. Merged, confirmed by author. | Whether #7119 was backported to a release branch is unknown. |
-| [7](#item-7-pyroscopescrape-default-scrape_timeout-shorter-than-the-default-cpu-profile-duration--not-a-bug) | `pyroscope.scrape` | Default `scrape_timeout` (10s) is shorter than the default CPU profile (14s) | Not a bug | None needed | n/a | Closed. Checked by reading source; not run. | Optional doc note on the effective timeout (tracked in the overview appendix). |
+| [7](#item-7-pyroscopescrape-default-scrape_timeout-shorter-than-the-default-cpu-profile-duration--not-a-bug) | `pyroscope.scrape` | Default `scrape_timeout` (10s) is shorter than the default CPU profile (14s) | Not a bug | None needed | n/a | Closed. Checked by reading source; not run. | Doc note on the effective timeout added (see Docs-only fixes below). |
 | [11](#item-11-prometheusexportercadvisor-allowlisted_container_labels-default--not-a-bug) | `prometheus.exporter.cadvisor` | `allowlisted_container_labels` is `[""]` in code but `[]` in the doc | Not a bug | None needed | n/a | Closed. Checked by reading source; not run. | None. |
 | [13](#item-13-pyroscopeebpf-documented-debug-information-capability-is-not-implemented) | `pyroscope.ebpf` | `## Debug information` section documented output the component cannot produce | Doc error (originally logged as Missing implementation) | Doc fix | Alloy branch `docs/correct-minor-errors-component-docs`; origin [#7099] | Fixed and committed on the branch. **PR and merge not confirmed.** | Optional: find out who added the `targets` bullet (see entry). |
 | [14](#item-14-pyroscopejava-thread-block-silently-no-ops-when-both-frame-and-label_name-are-unset--not-applicable) | `pyroscope.java` | A `thread` block does nothing when `frame` and `label_name` are both unset | Not applicable | None needed | n/a | Closed. The block is not in the current tree. | Reopen if a `thread` block lands. |
@@ -62,7 +62,7 @@ An item moves here when its fix has merged, or when it turned out to need no sou
   - `newScrapeLoop` adds `scrape_interval - 1s` to the timeout when the target has a `seconds` parameter (`scrape_loop.go:167-169`). The request context uses the extended value (`:218`). With defaults: 10s + 14s = 24s for a 14s profile.
   - A non-default `delta_profiling_duration` is capped at `scrape_interval - 1s` by validation (`scrape.go:227-233`), so the extension is always at least as long as the profile.
 - **Checked:** by reading the source. Not run; a live scrape with default settings would confirm it.
-- **Doc gap (optional):** the `scrape_timeout` description does not say the timeout is extended for delta profiles. Tracked in the overview appendix.
+- **Doc gap (fixed):** the `scrape_timeout` description did not say the timeout is extended for delta profiles. A section was added to the doc; see Docs-only fixes below.
 
 ### Item 11: `prometheus.exporter.cadvisor`: `allowlisted_container_labels` default — not a bug
 

@@ -1,0 +1,81 @@
+# Alloy component docs audit: closed and fixed items
+
+Compiled: 2026-10-13
+Repo: [grafana/alloy]
+Companion to: [overview.md](overview.md), the code-side defect catalog of open items and open questions.
+
+This file indexes items from the audit that are **fixed or closed** and need no further developer action. Each entry keeps the full evidence from the original catalog entry, so an item can be reopened or cited without going back to the overview. Original item numbers are kept so earlier cross-references still resolve.
+
+An item moves here when its fix has merged, or when it turned out to need no source change and the doc fix is done. Where a fix exists but is not yet merged, the status says so.
+
+**When an item moves here, leave a one-line pointer in [overview.md](overview.md)** at the item's original position: `**Item N:** [Fixed](closed-items.md#anchor)`. Nothing else on the line. The word "Fixed" is the link to the entry below (use the anchor shown in the Index table), and all details, including any caveat such as a PR that has not merged yet, go in the entry here.
+
+---
+
+## Index
+
+| Item | Component | Issue | Final type | Resolution | PR or branch | Status | Remaining follow-up |
+|---|---|---|---|---|---|---|---|
+| [5](#item-5-prometheusexportercatchpoint-non-functional-component-removed) | `prometheus.exporter.catchpoint` | Component did not function: the webhook listener was never started | Non-functional component (source defect) | Component removed | [#7309] (removal); audit finding in [#7111], backport [#7266] | Closed. Merged 2026-10-13 (reported by the author; not independently checked). | Whether the removal is backported to a release branch is unknown. |
+| [6](#item-6-pyroscopeebpf-pyroscope_ebpf_pprof_samples_total-counts-bytes) | `pyroscope.ebpf` | `pyroscope_ebpf_pprof_samples_total` counted bytes, not samples | Wrong metric (source defect) | Source fix | [#7119] (fix); [#7099] (found in); [#7124] (backport of #7099 to `release/v1.19`) | Closed. Merged, confirmed by author. | Whether #7119 was backported to a release branch is unknown. |
+| [13](#item-13-pyroscopeebpf-documented-debug-information-capability-is-not-implemented) | `pyroscope.ebpf` | `## Debug information` section documented output the component cannot produce | Doc error (originally logged as Missing implementation) | Doc fix | Alloy branch `docs/correct-minor-errors-component-docs`; origin [#7099] | Fixed and committed on the branch. **PR and merge not confirmed.** | Optional: find out who added the `targets` bullet (see entry). |
+
+### Not moved here, and why
+
+- **Appendix of docs-only fixes in [overview.md](overview.md):** left where it is. It mixes resolved rows with rows that are unfixed or awaiting sign-off, so it was not moved wholesale. Individual resolved rows can be moved on request.
+
+---
+
+## Items
+
+### Item 5: `prometheus.exporter.catchpoint`: non-functional component, removed
+
+- **Status:** Resolved by removal in [#7309]. Approved by kalleep and clayton-cornell on Oct 8. **Merged 2026-10-13** (reported by the author; I did not check the PR page). Whether the removal was backported is unknown.
+- **Type:** Non-functional component
+- **Source PRs:** audit finding in [#7111] (part 02) and backport [#7266]
+- **Cause (audit finding):** `port` and `webhook_path` are copied into the upstream `collector.Config`, but the collector package never reads either field (only struct declarations and defaults exist). The listener is started by the upstream binary (`cmd/catchpoint-exporter/main.go:55-62` calls `http.HandleFunc(*webhookPath, collector.HandleWebhook)` and `ListenAndServe`). Alloy imports only `collector`, never `cmd`, and `HandleWebhook` has zero references in the Alloy repo. Alloy's integration passes only `WithLogger` and `WithCollectors` ([internal/static/integrations/catchpoint_exporter/catchpoint_exporter.go][catchpoint_exporter.go] L64-65), so no runner is installed and `Run()` falls back to a no-op that blocks on `ctx.Done()`. `port` is used only locally as the instance key — `InstanceKey()` returns `c.Port`, so that one argument does do something.
+- **Secondary discrepancy (now moot):** upstream `NewConfig()` defaults `webhook_path` to `/webhook` while Alloy's `DefaultArguments` used `/catchpoint-webhook` (`collector/config.go:27` vs `catchpoint.go:29`).
+- **Resolution (from #7309):** testing found the component "did not function, and hasn't since its addition". It had zero open issues or PRs and no usage in anonymous usage stats, so it was removed rather than fixed. The PR deletes the component, the static `catchpoint_exporter` integration, the reference page (with a redirect), and the `github.com/grafana/catchpoint-prometheus-exporter` dependency. The component was experimental, so removal is outside backward-compatibility guarantees.
+- **Attribution caveat:** #7309 does not mention the audit. The audit finding (Sep 29) predates the removal PR (Oct 6), but a causal link is not shown.
+- **Doc state:** superseded by removal. Before that, the doc redescribed `port` as setting the `instance` label and `webhook_path` as having no effect, with a caution admonition.
+
+### Item 6: `pyroscope.ebpf`: `pyroscope_ebpf_pprof_samples_total` counts bytes
+
+- **Status:** Fixed by [#7119] (merged, confirmed by author)
+- **Type:** Wrong metric
+- **Source PR:** [#7099] (merged), backport [#7124] (merged to `release/v1.19`)
+- **Cause:** in [send.go][send.go], both `pprofSamplesTotal` (L31, `len(p.Raw)`) and `pprofBytesTotal` (L36, `len(rawProfile)`) were incremented from the same byte slice, making the samples counter a duplicate of the bytes counter rather than merely inaccurate. The Help string in [metrics.go][metrics.go] was a stale copy-paste ("Total number of pprof profiles collected...").
+- **Fix:** #7119 records the number of `pprof.Profile.Sample` entries with each generated profile and uses it for the samples counter. The bytes counter keeps counting raw profile bytes. Help text and reference docs corrected. Regression tests cover the counters independently.
+- **Open follow-up:** whether #7119 was backported to a release branch is unknown.
+- **User impact (author's reading):** dashboards and alerts built on the samples metric showed byte counts.
+
+### Item 13: `pyroscope.ebpf`: documented debug information capability is not implemented
+
+- **Status:** **Fixed 2026-10-13, committed by the author** on alloy branch `docs/correct-minor-errors-component-docs`. PR and merge not confirmed. The `## Debug information` section in `pyroscope.ebpf.md` now reads "`pyroscope.ebpf` doesn't expose any component-specific debug information." **Validated: this is a doc bug, not a source bug.** Implementing `DebugInfo()` is the only source-side alternative and nothing suggests it is wanted. No developer action needed unless maintainers want the feature.
+- **Validity:** Valid. The section documented debug output the component cannot produce.
+- **Type:** was Missing implementation. Reclassified as a doc error.
+- **Source PR:** [#7099]
+- **Cause:** the `## Debug information` section listed `elf_cache`, `pid_cache` and `targets` as debug output. The component implements no `DebugInfo()`, so none of these is ever shown.
+- **Evidence (source, validated 2026-10-13):**
+  - `component.DebugComponent` requires `DebugInfo() any` (`internal/component/component.go:103-114`). A component without that method exposes no debug info.
+  - No `DebugInfo` method exists in any file of the `internal/component/pyroscope/ebpf` package: `ebpf_linux.go` (the real `Component`), `ebpf_placeholder.go` (the non-Linux stub), `args.go`, `pool.go`, `metrics.go` and `send.go` were all searched. The sub-packages (`reporter`, `symb`, `discovery`) were **not** searched, but `Component` is defined in `ebpf_linux.go`, so a `DebugInfo` method on it would have to be in the package's top-level files.
+  - `elf_cache` and `pid_cache` have no references in the package. The only related symbol is `pid_cache_size` in `args.go:51`, which the doc itself marks Deprecated (no-op).
+  - `targets` is not debug info. The only thing tracking active targets is the gauge `pyroscope_ebpf_active_targets` (`ebpf_linux.go:233`, `c.metrics.targetsActive.Set(...)`), which is already in the Debug metrics table.
+- **Provenance (published docs, checked 2026-10-13):** the `elf_cache` / `pid_cache` bullets are legacy. They appear in the Grafana Agent Flow reference for `pyroscope.ebpf` and carried over into the Alloy docs, from an older implementation. The published Alloy `latest` page lists only those two bullets. The local branch had a third, `targets`, so that bullet was added after the published version. It reads like a conflation with the `pyroscope_ebpf_active_targets` metric.
+- **Fix applied:** replaced the section with the standard "`pyroscope.ebpf` doesn't expose any component-specific debug information." boilerplate, as used on `pyroscope.write` and, after this audit, `pyroscope.receive_http` and `pyroscope.relabel`. The alternative, implementing `DebugInfo()` to report the caches, would be a feature request, not a bug fix.
+- **Not established:** I could not retrieve the #7099 diff (the PR description and the review threads I could read do not mention this section, and the diff URL was not retrievable), so I cannot confirm whether #7099 added the `targets` bullet. To check locally: `git log -S"the active targets the component tracks" --oneline -- docs/sources/reference/components/pyroscope/pyroscope.ebpf.md`.
+- **Doc state before the fix:** the earlier note that this section was deliberately left untouched in #7099 pending a decision conflicts with the `targets` bullet, which is not in the published version. Treat "untouched" as unconfirmed. The equivalent gap on `pyroscope.receive_http` and `pyroscope.relabel` (both missing the section entirely) was fixed with the boilerplate after confirming neither implements `DebugInfo()` in source.
+- **User impact (author's reading):** readers looked for debug output that does not exist.
+
+---
+
+[grafana/alloy]: https://github.com/grafana/alloy
+[#7099]: https://github.com/grafana/alloy/pull/7099
+[#7119]: https://github.com/grafana/alloy/pull/7119
+[#7111]: https://github.com/grafana/alloy/pull/7111
+[#7266]: https://github.com/grafana/alloy/pull/7266
+[catchpoint_exporter.go]: https://github.com/grafana/alloy/blob/main/internal/static/integrations/catchpoint_exporter/catchpoint_exporter.go
+[#7124]: https://github.com/grafana/alloy/pull/7124
+[#7309]: https://github.com/grafana/alloy/pull/7309
+[send.go]: https://github.com/grafana/alloy/blob/main/internal/component/pyroscope/ebpf/send.go
+[metrics.go]: https://github.com/grafana/alloy/blob/main/internal/component/pyroscope/ebpf/metrics.go

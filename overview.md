@@ -37,7 +37,14 @@ Confirmed defects by type:
 
 Confirmed defects by area: 10 in `prometheus.*` (items 1, 2, 3, 4, 5, 8, 9, 10, 11, 12), 4 in `pyroscope.*` (items 6, 7, 13, 14), 0 in `remote.*`, 2 in shared `common/config` used by both `prometheus.*` and `remote.*` (items 15, 16).
 
-Docs impact: the validated docs describe real behaviour rather than advertising features that do not work. For kafka, the doc deliberately keeps `kafka_uris` as required so it does not expose the panic. For mssql, mongodb, cloudwatch (`static`) and consul, the doc states or works around the current behaviour and needs reverting if the source is fixed.
+Docs impact: the validated docs describe real behaviour rather than advertising features that do not work. For kafka, the doc keeps `kafka_uris` as required, which matches actual behaviour (the integration rejects an empty value at build; see Item 1). For mssql, mongodb, cloudwatch (`static`) and consul, the doc states or works around the current behaviour and needs reverting if the source is fixed.
+
+> **Validation pass in progress (started 2026-10-13).** Items are being re-verified against source one at a time. The counts and type tables above are **not yet reconciled** and still reflect the original catalog. Reclassified so far:
+>
+> - **Item 1** (kafka): the panic is not reachable. Downgraded from Crash to a low-severity validation gap. When the pass is complete, move it out of "Crash" and update the confirmed and open totals.
+> - **Item 5** (catchpoint): fixed by removal in #7309, merged 2026-10-13 (reported by the author). Moved to [closed-items.md](closed-items.md). When reconciling, it still counts under "Resolved by removing the component" above, which is now correct.
+> - **Item 6** (`pyroscope.ebpf` samples counter): fixed by #7119. Moved to [closed-items.md](closed-items.md).
+> - **Item 13** (`pyroscope.ebpf` debug information): a doc error, not a source defect, fixed in the doc and committed on a branch (PR and merge unconfirmed). Moved to [closed-items.md](closed-items.md). When the pass is complete, remove both from the type tables and the confirmed and open totals above, which still count them.
 
 ---
 
@@ -45,23 +52,46 @@ Docs impact: the validated docs describe real behaviour rather than advertising 
 
 Items 1 to 8 keep their original catalog numbering so earlier cross-references still resolve. Items 9 to 16 come from the agent session history and repo-memory deferral notes.
 
-### Item 1: `prometheus.exporter.kafka`: panic when `kafka_uris` is omitted
+Fixed items keep a one-line pointer here, in numeric position (**Item N:** Fixed, linked to the entry). All details are in [closed-items.md](closed-items.md). Their numbers are not reused.
 
-- **Status:** Open
-- **Type:** Crash
+### Item 1: `prometheus.exporter.kafka`: `kafka_uris` tagged optional but rejected at build time (originally logged as a panic)
+
+- **Status:** Open, **downgraded**. The original claim (panic when `kafka_uris` is omitted) is **not reachable** in the current tree. A smaller schema/validation mismatch remains.
+- **Validity (validated 2026-10-13):** Invalid as a crash. Valid as a low-severity validation gap. Do **not** file as a panic or crash.
+- **Type:** was Crash. Now Missing or misplaced validation (attribute tagged `optional`, but an empty value is rejected later, at component build, rather than at decode or in `Validate()`).
 - **Source PR:** [#7335] (part 06, draft or open)
-- **Cause:** `KafkaURIs` is tagged `alloy:"kafka_uris,attr,optional"`. In `customizeTarget`, when `len(a.KafkaURIs) > 1` the instance label comes from `a.Instance`; otherwise it uses `a.KafkaURIs[0]`. With length 0 that index is out of range. `Validate()` only guards the `len > 1` case.
-- **Fix options:** make the tag required, or add a length check in `customizeTarget`.
-- **Doc state:** the doc says Required: yes, which is the only thing preventing the panic today. Do not change it to optional.
-- **User impact (author's reading):** a config that omits the argument crashes the component instead of producing a clear error.
+- **Original claim:** `customizeTarget` indexes `a.KafkaURIs[0]` when `len(a.KafkaURIs) <= 1`, so an empty list is an out-of-range panic, and `Validate()` only guards `len > 1`.
+- **What is true:** the unguarded index exists. `KafkaURIs` is tagged `optional` (`internal/component/prometheus/exporter/kafka/kafka.go:35`). `customizeTarget` uses `a.KafkaURIs[0]` in its else branch (`kafka.go:97-100`). `Validate()` only checks `Instance == "" && len(a.KafkaURIs) > 1` (`kafka.go:87-89`).
+- **Why it is not reachable (call-order trace):**
+  1. `exporter.newExporter` calls `Update()` at construction, and `Update()` calls `c.creator(...)` first and returns on error (`internal/component/prometheus/exporter/exporter.go:86-89`). `c.targetBuilderFunc`, which is `customizeTarget`, is only called after that, at `exporter.go:104`.
+  2. `c.creator` is `createExporter` (`kafka.go:105-108`), which calls `integrations.NewIntegrationWithInstanceKey` (`internal/static/integrations/integration.go:55-62`): `cfg.InstanceKey()` first, then `cfg.NewIntegration()`.
+  3. With zero URIs, `InstanceKey()` returns `c.Instance, nil` and does not error (`internal/static/integrations/kafka_exporter/kafka_exporter.go:155-163`).
+  4. `NewIntegration()` calls `New()`, which returns `empty kafka_uris provided` when `len(c.KafkaURIs) == 0 || c.KafkaURIs[0] == ""` (`kafka_exporter.go:177-179`).
+  5. So `Update()` returns that error and `customizeTarget` never runs with an empty or empty-first-element list. `kafka_uris = [""]` is also rejected by the same check.
+- **Evidence gaps:** call-order trace only. Not run. Tree inspected: `grafana/alloy` local checkout, branch `docs/component-export-receiver`, commit `b7a1698d7b2370861a2f045883ca112e1b7f004f` (not `main`; the kafka files were not compared against `main`). No existing test covers the empty-URI case in either direction (`kafka_test.go` only tests `customizeTarget` with two URIs). The exact way the error surfaces to the user (log, component health, UI) was not checked.
+- **Repro to run before filing anything (not yet run):** `prometheus.exporter.kafka "x" { }` in a minimal config, then `alloy run`. Expected from the trace: a component build error mentioning `empty kafka_uris provided`, no panic. Also check whether `alloy validate` catches it, since `Validate()` does not.
+- **What remains as a real, minor defect:** the schema says optional but the component cannot run without the value, and `Validate()` does not reflect that. `customizeTarget` is also unsafe if it is ever reached another way, though no such path was found. Neither has user-visible crash impact today.
+- **Fix options (low priority):** make the tag required (or add a `len == 0` check to `Validate()`), which moves the error earlier and makes the schema honest. A length check in `customizeTarget` is defensive only. Configs that omit the argument already fail, so this is not a breaking change in practice.
+- **Related finding, found while tracing (needs confirmation, not yet in the catalog count):** with exactly one entry in `kafka_uris`, the `instance` argument is ignored. `InstanceKey()` returns `KafkaURIs[0]` whenever `len == 1` without looking at `Instance` (`kafka_exporter.go:155-163`), and `customizeTarget` does the same for `len <= 1` (`kafka.go:97-100`). The doc describes the first URI as the default `instance`, which implies it can be overridden. Medium confidence: read from source, not run. Treat as a candidate Non-functional argument item and verify with a one-URI config that sets `instance`.
+- **Doc state:** the doc says Required: yes, which matches actual behaviour (a config without the value is rejected). This is **not** what prevents a panic, so the earlier wording that the doc was the only guard was wrong. Do not change it to optional. If the tag is made required in source, the doc is already correct.
+- **User impact (revised):** a config that omits `kafka_uris` fails to build with a clear-enough error. No crash. The error appears at build, not at config decode.
 
 ### Item 2: `prometheus.exporter.mongodb`: `enable_profile` is a no-op
 
 - **Status:** Open
 - **Type:** Non-functional argument
 - **Source PR:** [#7335]
-- **Cause:** upstream `percona/mongodb_exporter@v0.47.2` (`exporter.go:227`) gates profiling on `e.opts.EnableProfile && nodeType != typeMongos && limitsOk && requestOpts.EnableProfile && e.opts.ProfileTimeTS != 0`. `ProfileTimeTS` is only set by the upstream CLI flag `collector.profile-time-ts` (`main.go:78`, `:196`). `exporter.New()` defaults only `Logger`. Alloy never sets it (`grep -rn 'ProfileTimeTS' internal/` returns nothing, and `mongodb_exporter.go:96` builds `exporter.Opts{}` with 19 fields, omitting it). The value is always 0, so the gate never passes.
-- **Fix options:** expose a `profile_time_ts` argument, or set a non-zero default in `Convert()`.
+- **Cause:** upstream `percona/mongodb_exporter@v0.47.2` (`exporter.go:227`) gates profiling on `e.opts.EnableProfile && nodeType != typeMongos && limitsOk && requestOpts.EnableProfile && e.opts.ProfileTimeTS != 0`. `ProfileTimeTS` is only set by the upstream CLI flag `collector.profile-time-ts` (`main.go:78`, `:196`). `exporter.New()` defaults only `Logger`. Alloy never sets it (`grep -rn 'ProfileTimeTS' internal/` returns nothing, and `mongodb_exporter.go:96` builds `exporter.Opts{}` omitting it. **Correction (2026-10-13):** the literal at `mongodb_exporter.go:96-118` has **21** fields in the current tree, not 19; the count in the original note was stale or miscounted. It does not change the conclusion.). The value is always 0, so the gate never passes.
+- **Validity (partially validated 2026-10-13):** Valid on the Alloy side, high confidence. The upstream gate is **not independently verified**.
+- **Verified:**
+  - `enable_profile` is accepted and passed through: `mongodb.go:48` and `:71` (component), `mongodb_exporter.go:57` and `:114` (integration), default `false`.
+  - Alloy never sets `ProfileTimeTS`. The `exporter.Opts` literal at `mongodb_exporter.go:96-118` has 21 fields and none is `ProfileTimeTS`, and the string does not occur in `mongodb_exporter.go` or `mongodb.go`.
+  - `ProfileTimeTS int` exists in `exporter.Opts` at `percona/mongodb_exporter` v0.47.2 (pkg.go.dev), and `go.mod:196` pins `v0.47.2`.
+  - The upstream CLI declares the flag `collector.profile-time-ts` with a default of `30` (seen in an upstream PR diff, **version not confirmed** to be v0.47.2). Alloy bypasses the CLI, so the field stays `0`.
+- **Not verified:** the upstream gate at `exporter.go:227` (`... && e.opts.ProfileTimeTS != 0`) and the claim that `exporter.New()` defaults only `Logger`. The only place I found the gate expression is the #7335 description, which is the claim itself, so it is not independent. I also only searched the two Alloy files above, not the whole `internal/` tree, so the "`grep -rn 'ProfileTimeTS' internal/` returns nothing" result is carried over from the original note.
+- **To finish verifying (local, a few minutes):** run `grep -rn 'ProfileTimeTS' internal/` in the alloy repo (expect no output), then read the gate in `$(go env GOMODCACHE)/github.com/percona/mongodb_exporter@v0.47.2/exporter/exporter.go` near line 227 and check `exporter.New()` for defaults. Then optionally prove the no-op: run with `enable_profile = true` against a MongoDB with profiling enabled and confirm no profile metrics appear.
+- **Doc impact today:** the doc says only "Enables collecting profile metrics." with default `false` (`prometheus.exporter.mongodb.md:53`), with no caveat, so a reader is misled. This is a deliberate choice already recorded below.
+- **Fix options:** expose a `profile_time_ts` argument, or set a non-zero default in `Convert()`. Upstream's CLI default of `30` (unconfirmed for v0.47.2) is the natural value to match.
 - **Doc state:** deliberately unchanged; becomes correct once the source is fixed. Do not add a "currently has no effect" note, and do not add a `mongos` caveat to this argument — that caveat is correct for `currentop_slow_time`, whose own gate Alloy does satisfy.
 - **User impact (author's reading):** users enable profiling and get no profiling metrics, with no warning.
 
@@ -86,28 +116,9 @@ Items 1 to 8 keep their original catalog numbering so earlier cross-references s
 - **Doc state:** documented in two places: the `static` section's no-effect note at cloudwatch.md L419-421, and the inheritance sentence in the `metric` section. Both need reverting if the source is fixed.
 - **User impact (author's reading):** the config parses cleanly and runs, but the user's timing settings are ignored.
 
-### Item 5: `prometheus.exporter.catchpoint`: non-functional component, removed
+**Item 5:** [Fixed](closed-items.md#item-5-prometheusexportercatchpoint-non-functional-component-removed)
 
-- **Status:** Resolved by removal in [#7309]. Approved by kalleep and clayton-cornell on Oct 8; **merge not confirmed**. Confirm before presenting.
-- **Type:** Non-functional component
-- **Source PRs:** audit finding in [#7111] (part 02) and backport [#7266]
-- **Cause (audit finding):** `port` and `webhook_path` are copied into the upstream `collector.Config`, but the collector package never reads either field (only struct declarations and defaults exist). The listener is started by the upstream binary (`cmd/catchpoint-exporter/main.go:55-62` calls `http.HandleFunc(*webhookPath, collector.HandleWebhook)` and `ListenAndServe`). Alloy imports only `collector`, never `cmd`, and `HandleWebhook` has zero references in the Alloy repo. Alloy's integration passes only `WithLogger` and `WithCollectors` ([internal/static/integrations/catchpoint_exporter/catchpoint_exporter.go][catchpoint_exporter.go] L64-65), so no runner is installed and `Run()` falls back to a no-op that blocks on `ctx.Done()`. `port` is used only locally as the instance key — `InstanceKey()` returns `c.Port`, so that one argument does do something.
-- **Secondary discrepancy (now moot):** upstream `NewConfig()` defaults `webhook_path` to `/webhook` while Alloy's `DefaultArguments` used `/catchpoint-webhook` (`collector/config.go:27` vs `catchpoint.go:29`).
-- **Resolution (from #7309):** testing found the component "did not function, and hasn't since its addition". It had zero open issues or PRs and no usage in anonymous usage stats, so it was removed rather than fixed. The PR deletes the component, the static `catchpoint_exporter` integration, the reference page (with a redirect), and the `github.com/grafana/catchpoint-prometheus-exporter` dependency. The component was experimental, so removal is outside backward-compatibility guarantees.
-- **Attribution caveat:** #7309 does not mention the audit. The audit finding (Sep 29) predates the removal PR (Oct 6), but a causal link is not shown.
-- **Doc state:** superseded by removal. Before that, the doc redescribed `port` as setting the `instance` label and `webhook_path` as having no effect, with a caution admonition.
-
-### Item 6: `pyroscope.ebpf`: `pyroscope_ebpf_pprof_samples_total` counts bytes
-
-- **Status:** Fixed by [#7119] (merged, confirmed by author)
-- **Type:** Wrong metric
-- **Source PR:** [#7099] (merged), backport [#7124] (merged to `release/v1.19`)
-- **Cause:** in [send.go][send.go], both `pprofSamplesTotal` (L31, `len(p.Raw)`) and `pprofBytesTotal` (L36, `len(rawProfile)`) were incremented from the same byte slice, making the samples counter a duplicate of the bytes counter rather than merely inaccurate. The Help string in [metrics.go][metrics.go] was a stale copy-paste ("Total number of pprof profiles collected...").
-- **Fix:** #7119 records the number of `pprof.Profile.Sample` entries with each generated profile and uses it for the samples counter. The bytes counter keeps counting raw profile bytes. Help text and reference docs corrected. Regression tests cover the counters independently.
-- **Verified 2026-10-09:** `pyroscope.ebpf.md` line 150 now reads "Total number of samples in pprof profiles collected by the eBPF component, per `service_name`." The doc describes sample counting.
-- **Open follow-up — conflict with section 4:** on 2026-09-16 the code owner had `pprof_bytes_total`, `pprof_samples_total`, `pprofs_dropped_total` and `pyroscope_forwarded_entries_total` **removed** from the docs as part of the deliberately-undocumented debug-info surface. #7119 re-added two of the four; `pprofs_dropped_total` and `pyroscope_forwarded_entries_total` are still absent. Confirm the re-add was intended.
-- **Open follow-up:** whether #7119 was backported to a release branch is unknown.
-- **User impact (author's reading):** dashboards and alerts built on the samples metric showed byte counts.
+**Item 6:** [Fixed](closed-items.md#item-6-pyroscopeebpf-pyroscope_ebpf_pprof_samples_total-counts-bytes)
 
 ### Item 7: `pyroscope.scrape`: default `scrape_timeout` is shorter than the default CPU profile duration
 
@@ -139,8 +150,8 @@ Items 1 to 8 keep their original catalog numbering so earlier cross-references s
 - **Cause:** [github.go][github.go] `DefaultArguments` is `Arguments{ APIURL: github_exporter.DefaultConfig.APIURL }` — it pulls `APIURL` from `DefaultConfig` but not `GitHubRateLimit`, and `Convert()` passes `a.GitHubRateLimit` straight through. The static YAML path gets `15000` via `UnmarshalYAML` (`*c = DefaultConfig` in [github_exporter.go][github_exporter.go]); the Alloy path gets the float64 zero value.
 - **Consequence:** traced in `githubexporter/github-exporter@v1.3.1`, `exporter/prometheus.go` L26-37 `Collect()` → `if e.Config.GitHubApp()` → `isTokenExpired()` → L87-90 `if limit < e.Config.GitHubRateLimit()`. With 0, `limit < 0` is never true, so `SetAPITokenFromGitHubApp()` never runs.
 - **Re-verified 2026-10-09** against the current tree: `DefaultArguments` still sets only `APIURL`.
-- **Fix options:** add `GitHubRateLimit` to `DefaultArguments` (preferred), or correct the doc to `0`.
-- **Doc state:** the doc claims default `15000`, which is wrong for Alloy. The description "Threshold for GitHub App rate limit to trigger re-authentication" is accurate and needs no change.
+- **Fix options:** add `GitHubRateLimit: github_exporter.DefaultConfig.GitHubRateLimit` to `DefaultArguments`. This is the only real fix. Documenting `0` is not an option: it would describe the bug as intended behaviour, and `0` disables re-authentication.
+- **Doc state (corrected 2026-10-13):** the doc's default of `15000` is the **intended** value (`DefaultConfig.GitHubRateLimit`, and the field comment in `github_exporter.go` says "Default is 15,000"). It is correct as a statement of intent but does not match Alloy's actual behaviour, which is `0`. This is a source defect, not a doc bug. Leave the doc at `15000`. The description "Threshold for GitHub App rate limit to trigger re-authentication" is accurate and needs no change.
 - **User impact (author's reading):** GitHub App credentials silently stop refreshing unless the user sets the value explicitly.
 
 ### Item 10: `prometheus.exporter.github`: partial GitHub App configuration is silently ignored
@@ -174,15 +185,7 @@ Items 1 to 8 keep their original catalog numbering so earlier cross-references s
 - **Doc state:** handled as a doc fix — the standard "only reported as unhealthy if given an invalid configuration" boilerplate was false on this page and was corrected. The source side was never raised with developers.
 - **User impact (author's reading):** a misspelled `format` produces `text` output and a log line, with no health signal.
 
-### Item 13: `pyroscope.ebpf`: documented debug information capability is not implemented
-
-- **Status:** Open. Needs a maintainer decision (code or docs).
-- **Type:** Missing implementation
-- **Source PR:** [#7099]
-- **Cause:** the `## Debug information` section describes a `DebugInfo()`-style capability. The component implements no `DebugInfo()` at all.
-- **Fix options:** implement `DebugInfo()` to match the documented behaviour, or replace the section with the standard "doesn't expose any component-specific debug information" boilerplate.
-- **Doc state:** deliberately left untouched in #7099 pending the decision. The equivalent gap on `pyroscope.receive_http` and `pyroscope.relabel` — both missing the section entirely — was fixed with the boilerplate, after confirming neither implements `DebugInfo()` in source.
-- **User impact (author's reading):** readers look for debug output that does not exist.
+**Item 13:** [Fixed](closed-items.md#item-13-pyroscopeebpf-documented-debug-information-capability-is-not-implemented)
 
 ### Item 14: `pyroscope.java`: `thread` block silently no-ops when both `frame` and `label_name` are unset
 
@@ -223,17 +226,19 @@ These are behaviours or open questions, not confirmed defects. Each needs a deve
 | # | Component | Finding | Status | Source |
 |---|---|---|---|---|
 | L1 | `pyroscope.java` | `per_thread` does not apply to async-profiler JFR mode; korniltsev believes enabling it would break profiling (untested) and suggests removing or deprecating the flag. Tracked in [issue #5340]. A replacement already exists: the `threads_fix` branch adds a `thread` block (`frame`, `label_name`, `regex`) under `profiling_config` and removes `tlab`, and the doc now points from the `per_thread` admonition to it. | Open, tracked | [#7099] |
-| L2 | `pyroscope.ebpf` | `pyroscope_ebpf_profiling_sessions_total` is incremented right after `controller.Start` succeeds, so it counts sessions started, not completed. Same family of metric-semantics mismatch as item 6. **The doc is not wrong** — it already reads "Number of profiling sessions started by the eBPF component" (verified 2026-10-09), so this is a metric-naming question only. | Open | [#7099] |
+| L2 | `pyroscope.ebpf` | `pyroscope_ebpf_profiling_sessions_total` is incremented right after `controller.Start` succeeds, so it counts sessions started, not completed. Same family of metric-semantics mismatch as item 6 (now in [closed-items.md](closed-items.md)). **The doc is not wrong** — it already reads "Number of profiling sessions started by the eBPF component" (verified 2026-10-09), so this is a metric-naming question only. | Open | [#7099] |
 | L3 | `remote.vault` | `data` handling accepts `string` and `[]byte` values and silently ignores other types (`internal/component/remote/vault/vault.go:279-293`). Possibly intended. | Open | [#7097], backport [#7118] |
 | L5 | `prometheus.exporter.azure` | `azure_cloud_environment` also accepts `ussec`, `azuresecret` and `azurepsecretcloud` in the vendored `webdevops/go-common` cloudconfig library (`cloudconfig.NewCloudConfig()`), none of which are documented. These and the documented `azurepprivatecloud` need `AZURE_CLOUD_CONFIG` / `AZURE_CLOUD_CONFIG_FILE` env vars to work. Needs a developer answer on whether these values are supported before documenting them. | Needs confirmation | [#7107], backport [#7267] |
-| L7 | `pyroscope.write` | `pyroscope_ebpf_debug_info_upload_bytes_total` is emitted by `pyroscope.write` but carries an `ebpf` prefix. Introduced in PR [#4948] alongside the ebpf `debug_info` block, and named for the feature rather than the emitting component. Git history shows no earlier or parallel copy in the `ebpf` package, so an initial "copy-paste bug" characterisation was explicitly withdrawn. Low severity, and currently moot for docs since the metric is undocumented. | Open naming question | [#7099] |
+| L7 | `pyroscope.write` | `pyroscope_ebpf_debug_info_upload_bytes_total` is emitted by `pyroscope.write` but carries an `ebpf` prefix. Introduced in PR [#4948] alongside the ebpf `debug_info` block, and named for the feature rather than the emitting component. Git history shows no earlier or parallel copy in the `ebpf` package, so an initial "copy-paste bug" characterisation was explicitly withdrawn. **Explained by the code owner (Slack):** the metric was meant for the ebpf component and was then moved to `pyroscope.write`, which is why the name carries `ebpf`. He does not mind renaming it, but wants the whole debug-info feature to stay undocumented. Low severity, and moot for docs since the metric is undocumented. | Explained; rename optional and low priority | [#7099] |
 | L8 | `prometheus.exporter.cloudwatch` | A reviewer (dehaansa) asked what the sentence about `length` and `period` request windows means. The author reworked it from `config.go` comments but could not validate the behaviour inside YACE requests. | Needs developer or YACE confirmation | [#7281] |
 
 ---
 
 ## 4. Intentionally undocumented surface
 
-Not defects. Functionality that exists in code and was deliberately removed from the docs at the code owner's request, with no stated condition for when it becomes documentable. Recorded here so the gap is traceable rather than mistaken for a completeness failure in a later review.
+Not defects. Functionality that exists in code and was deliberately left out of the docs at the code owner's request. Recorded here so the gap is traceable rather than mistaken for a completeness failure in a later review.
+
+**Reason (confirmed by the code owner, korniltsev-grafanista, in Slack; undated export, but before #7099 merged on Sep 16 and #7119 was opened):** the debug-info feature is highly experimental. It is mostly needed to dogfood server-side code, and both the Alloy side and the database side are expected to change significantly. It is deliberately undocumented so it can be removed or broken later without a compatibility commitment. There is no timeline or condition for documenting it.
 
 | Component | Withheld from the docs | Source |
 |---|---|---|
@@ -241,12 +246,18 @@ Not defects. Functionality that exists in code and was deliberately removed from
 | `pyroscope.write` | The `tracing` block (`jaeger_propagator`, `trace_context_propagator`), the `debug_info_upload_timeout` endpoint argument, and `pyroscope_ebpf_debug_info_upload_bytes_total`. | [#7099] |
 | `pyroscope.receive_http` | `debug_info_upload_timeout`, the debug-info upload proxy endpoint (`POST /debuginfo.v1alpha1.DebuginfoService/Upload/{gnu_build_id}`) with its first-receiver-only forwarding behaviour, and metric `pyroscope_receive_http_debuginfo_downstream_calls_total`. | [#7099] |
 
-**This list is now partially stale.** As of 2026-10-09, `pyroscope.ebpf.md` documents `pyroscope_ebpf_pprof_bytes_total` and `pyroscope_ebpf_pprof_samples_total` again — re-added by [#7119] when it fixed item 6. `pprofs_dropped_total` and `pyroscope_forwarded_entries_total` are still absent. Confirm with the code owner whether the re-add was intended.
+**Per-item notes from the same Slack conversation:**
 
-Two sub-questions from the same review were never answered:
+- **`pyroscope.ebpf` `debug_info` block:** history is PR #4948 (added), #5391 (removed, with its docs), #5891 (added back to the component, docs not restored). The missing docs after #5891 were intentional, not an oversight, so there is nothing to restore.
+- **`pyroscope.write` `tracing` block:** added in #4354. The code owner has only tested the Jaeger knob and expects Pyroscope to move from Jaeger to OpenTelemetry, which would add a new knob and deprecate the others. Left undocumented to keep the freedom to remove it.
+- **`pyroscope_ebpf_debug_info_upload_bytes_total` on `pyroscope.write`:** see L7. The code owner prefers it stay undocumented.
 
-- What is the intended default for `strip_text_section`? The Go zero value `false` was used, since `NewDefaultArguments` does not set it.
-- Is `debug_info` meant to be user-facing at all, or was it deliberately left out of the re-add PR?
+**Source comments:** the agreed convention is to mark intentionally undocumented items with inline comments in the **source**, not in the docs. The code owner referenced PR #7127 for these comments. Its merge status and exact wording were not checked. The audit skill already looks for such comments when it finds something undocumented. Reason for source-only: one place to maintain, and a docs comment could mislead an agent that reads an older doc version after the feature is documented.
+
+Two sub-questions from the same review:
+
+- **Unanswered:** what is the intended default for `strip_text_section`? The Go zero value `false` was used, since `NewDefaultArguments` does not set it.
+- **Answered by the code owner:** is `debug_info` meant to be user-facing? No. It is intentionally undocumented and experimental (see Reason above).
 
 ---
 
@@ -265,7 +276,7 @@ Two sub-questions from the same review were never answered:
 | [#7320]                                   | Second pass, `pyroscope.*`                         | Merged Oct 7                  | [#7331] merged            | None (style only)                     |
 | [#7321]                                   | Second pass, `remote.*`                            | Merged                        | [#7330] merged            | None (content split from [#7270])     |
 | [#7119]                                   | Fix `pyroscope.ebpf` samples counter               | Merged (per author)           | Unknown                   | Resolves item 6                       |
-| [#7309]                                   | Remove `prometheus.exporter.catchpoint`            | Open, approved Oct 8          | Unknown                   | Resolves item 5                       |
+| [#7309]                                   | Remove `prometheus.exporter.catchpoint`            | Merged Oct 13 (per author)    | Unknown                   | Resolves item 5 (see [closed-items.md](closed-items.md))                       |
 | `feat/http-oauth2-add-client-private-key` | oauth2 block partial review, 2026-10-08            | Branch; no PR number recorded | —                         | Items 15, 16                          |
 | `threads_fix`                             | `pyroscope.java` `thread` block review, 2026-08-10 | Branch; no PR number recorded | —                         | Item 14                               |
 
@@ -276,9 +287,7 @@ Two sub-questions from the same review were never answered:
 Open questions that should be settled before this catalog is presented.
 
 - **Items 9 and 10 have no home.** [#7284] merged Oct 7 without them. They need a tracking issue or a follow-up PR.
-- **#7309 (catchpoint removal):** has it merged, and on what date?
 - **#7119:** backported to any release branch?
-- **Section 4 staleness:** was re-adding `pprof_bytes_total` and `pprof_samples_total` to `pyroscope.ebpf.md` in #7119 intended, given #7099 removed them at the code owner's request?
 - **Item 7:** does the source behave as Copilot described (10s timeout against a 14s default CPU delta)? The 10s default is confirmed; the 14s half is not independently verified.
 - **Item 10:** exact line numbers for the GitHub App auth guard were never recorded. Re-read before filing.
 - **Item 12:** is the missing `format` validation worth fixing, or is the fall-through intended?
@@ -290,7 +299,6 @@ Open questions that should be settled before this catalog is presented.
 Closed during this pass, 2026-10-09:
 
 - `remote.vault` `AWS_SESSION` versus `AWS_SESSION_TOKEN` — resolved. See the appendix.
-- "Does `pyroscope.ebpf.md` on `main` describe sample counting?" — yes, line 150.
 - L2's doc wording — already correct, says "started".
 - Item 9 — re-verified live against the current tree.
 

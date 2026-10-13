@@ -6,6 +6,8 @@ Scope: `remote.*`, `pyroscope.*` and `prometheus.*` component reference validati
 
 This catalog lists defects and open questions that the doc audits exposed in the **source code** and that were deferred to developers. It covers fixed, resolved and open items. Doc-wording fixes are excluded and listed in the appendix.
 
+**Where things live:** items judged to be real code bugs are written up for the dev team in [code-issues.md](code-issues.md). Fixed and closed items are in [closed-items.md](closed-items.md). This file keeps a verdict and a link for each, plus anything still being checked.
+
 Two evidence streams are merged here: the PR descriptions, commit lists and review threads for the audit PRs; and the agent session history plus repo-memory deferral notes written during those same reviews. Where they disagree, the discrepancy is called out in the item.
 
 ---
@@ -41,9 +43,20 @@ Docs impact: the validated docs describe real behaviour rather than advertising 
 
 > **Validation pass in progress (started 2026-10-13).** Items are being re-verified against source one at a time. The counts and type tables above are **not yet reconciled** and still reflect the original catalog. Reclassified so far:
 >
-> - **Item 1** (kafka): the panic is not reachable. Downgraded from Crash to a low-severity validation gap. When the pass is complete, move it out of "Crash" and update the confirmed and open totals.
+> - **Item 1** (kafka): reclassified, low severity, see [code-issues.md](code-issues.md). The type table above still lists it under "Crash"; when the pass is complete, move it and update the totals.
+> - **Item 2** (mongodb): confirmed on the Alloy side, medium severity, see [code-issues.md](code-issues.md).
+> - **Item 3** (mssql): confirmed, low severity, see [code-issues.md](code-issues.md).
+> - **Item 4** (cloudwatch `static`): confirmed, low severity, see [code-issues.md](code-issues.md).
+> - **Item 8** (consul): confirmed, medium severity, see [code-issues.md](code-issues.md).
+> - **Item 9** (github `github_rate_limit`): confirmed, medium severity, see [code-issues.md](code-issues.md).
+> - **Item 10** (github partial App config): confirmed, low severity, see [code-issues.md](code-issues.md).
+> - **Item 11** (cadvisor `allowlisted_container_labels`): not a bug, `Convert()` normalises `[]` to `[""]`, so the doc is right. Moved to [closed-items.md](closed-items.md).
+> - **Item 12** (`prometheus.echo` `format`): possible issue, low severity, needs a dev decision, see [code-issues.md](code-issues.md).
 > - **Item 5** (catchpoint): fixed by removal in #7309, merged 2026-10-13 (reported by the author). Moved to [closed-items.md](closed-items.md). When reconciling, it still counts under "Resolved by removing the component" above, which is now correct.
 > - **Item 6** (`pyroscope.ebpf` samples counter): fixed by #7119. Moved to [closed-items.md](closed-items.md).
+> - **Item 7** (`pyroscope.scrape` timeout): not a bug, the scrape loop extends the timeout for delta profiles. Moved to [closed-items.md](closed-items.md).
+> - **Item 14** (`pyroscope.java` `thread` block): not applicable to the current source, the block is not in the tree. Moved to [closed-items.md](closed-items.md).
+> - **Items 15 and 16** (shared `oauth2` block): cannot be verified against the current source. The JWT fields are not in the tree, and the feature branch's PR number is unverified.
 > - **Item 13** (`pyroscope.ebpf` debug information): a doc error, not a source defect, fixed in the doc and committed on a branch (PR and merge unconfirmed). Moved to [closed-items.md](closed-items.md). When the pass is complete, remove both from the type tables and the confirmed and open totals above, which still count them.
 
 ---
@@ -54,168 +67,87 @@ Items 1 to 8 keep their original catalog numbering so earlier cross-references s
 
 Fixed items keep a one-line pointer here, in numeric position (**Item N:** Fixed, linked to the entry). All details are in [closed-items.md](closed-items.md). Their numbers are not reused.
 
-### Item 1: `prometheus.exporter.kafka`: `kafka_uris` tagged optional but rejected at build time (originally logged as a panic)
+### Item 1: `prometheus.exporter.kafka`: `instance` ignored with one URI; `kafka_uris` not validated
 
-- **Status:** Open, **downgraded**. The original claim (panic when `kafka_uris` is omitted) is **not reachable** in the current tree. A smaller schema/validation mismatch remains.
-- **Validity (validated 2026-10-13):** Invalid as a crash. Valid as a low-severity validation gap. Do **not** file as a panic or crash.
-- **Type:** was Crash. Now Missing or misplaced validation (attribute tagged `optional`, but an empty value is rejected later, at component build, rather than at decode or in `Validate()`).
-- **Source PR:** [#7335] (part 06, draft or open)
-- **Original claim:** `customizeTarget` indexes `a.KafkaURIs[0]` when `len(a.KafkaURIs) <= 1`, so an empty list is an out-of-range panic, and `Validate()` only guards `len > 1`.
-- **What is true:** the unguarded index exists. `KafkaURIs` is tagged `optional` (`internal/component/prometheus/exporter/kafka/kafka.go:35`). `customizeTarget` uses `a.KafkaURIs[0]` in its else branch (`kafka.go:97-100`). `Validate()` only checks `Instance == "" && len(a.KafkaURIs) > 1` (`kafka.go:87-89`).
-- **Why it is not reachable (call-order trace):**
-  1. `exporter.newExporter` calls `Update()` at construction, and `Update()` calls `c.creator(...)` first and returns on error (`internal/component/prometheus/exporter/exporter.go:86-89`). `c.targetBuilderFunc`, which is `customizeTarget`, is only called after that, at `exporter.go:104`.
-  2. `c.creator` is `createExporter` (`kafka.go:105-108`), which calls `integrations.NewIntegrationWithInstanceKey` (`internal/static/integrations/integration.go:55-62`): `cfg.InstanceKey()` first, then `cfg.NewIntegration()`.
-  3. With zero URIs, `InstanceKey()` returns `c.Instance, nil` and does not error (`internal/static/integrations/kafka_exporter/kafka_exporter.go:155-163`).
-  4. `NewIntegration()` calls `New()`, which returns `empty kafka_uris provided` when `len(c.KafkaURIs) == 0 || c.KafkaURIs[0] == ""` (`kafka_exporter.go:177-179`).
-  5. So `Update()` returns that error and `customizeTarget` never runs with an empty or empty-first-element list. `kafka_uris = [""]` is also rejected by the same check.
-- **Evidence gaps:** call-order trace only. Not run. Tree inspected: `grafana/alloy` local checkout, branch `docs/component-export-receiver`, commit `b7a1698d7b2370861a2f045883ca112e1b7f004f` (not `main`; the kafka files were not compared against `main`). No existing test covers the empty-URI case in either direction (`kafka_test.go` only tests `customizeTarget` with two URIs). The exact way the error surfaces to the user (log, component health, UI) was not checked.
-- **Repro to run before filing anything (not yet run):** `prometheus.exporter.kafka "x" { }` in a minimal config, then `alloy run`. Expected from the trace: a component build error mentioning `empty kafka_uris provided`, no panic. Also check whether `alloy validate` catches it, since `Validate()` does not.
-- **What remains as a real, minor defect:** the schema says optional but the component cannot run without the value, and `Validate()` does not reflect that. `customizeTarget` is also unsafe if it is ever reached another way, though no such path was found. Neither has user-visible crash impact today.
-- **Fix options (low priority):** make the tag required (or add a `len == 0` check to `Validate()`), which moves the error earlier and makes the schema honest. A length check in `customizeTarget` is defensive only. Configs that omit the argument already fail, so this is not a breaking change in practice.
-- **Related finding, found while tracing (needs confirmation, not yet in the catalog count):** with exactly one entry in `kafka_uris`, the `instance` argument is ignored. `InstanceKey()` returns `KafkaURIs[0]` whenever `len == 1` without looking at `Instance` (`kafka_exporter.go:155-163`), and `customizeTarget` does the same for `len <= 1` (`kafka.go:97-100`). The doc describes the first URI as the default `instance`, which implies it can be overridden. Medium confidence: read from source, not run. Treat as a candidate Non-functional argument item and verify with a one-URI config that sets `instance`.
-- **Doc state:** the doc says Required: yes, which matches actual behaviour (a config without the value is rejected). This is **not** what prevents a panic, so the earlier wording that the doc was the only guard was wrong. Do not change it to optional. If the tag is made required in source, the doc is already correct.
-- **User impact (revised):** a config that omits `kafka_uris` fails to build with a clear-enough error. No crash. The error appears at build, not at config decode.
+- **Verdict:** real, low severity. `instance` is ignored when there is one URI, and `kafka_uris` is required but tagged optional. Details and evidence: [code-issues.md](code-issues.md#item-1-prometheusexporterkafka-instance-ignored-with-one-uri-kafka_uris-not-validated)
+- **Type:** Silently ignored argument (`instance`) and Misplaced validation (`kafka_uris`).
+- **Source PR:** [#7335]
 
-### Item 2: `prometheus.exporter.mongodb`: `enable_profile` is a no-op
+### Item 2: `prometheus.exporter.mongodb`: `enable_profile` has no effect
 
-- **Status:** Open
+- **Verdict:** real, medium severity. Alloy never sets the upstream option that profile collection depends on. The upstream condition itself is for the devs to confirm. Details: [code-issues.md](code-issues.md#item-2-prometheusexportermongodb-enable_profile-has-no-effect)
 - **Type:** Non-functional argument
 - **Source PR:** [#7335]
-- **Cause:** upstream `percona/mongodb_exporter@v0.47.2` (`exporter.go:227`) gates profiling on `e.opts.EnableProfile && nodeType != typeMongos && limitsOk && requestOpts.EnableProfile && e.opts.ProfileTimeTS != 0`. `ProfileTimeTS` is only set by the upstream CLI flag `collector.profile-time-ts` (`main.go:78`, `:196`). `exporter.New()` defaults only `Logger`. Alloy never sets it (`grep -rn 'ProfileTimeTS' internal/` returns nothing, and `mongodb_exporter.go:96` builds `exporter.Opts{}` omitting it. **Correction (2026-10-13):** the literal at `mongodb_exporter.go:96-118` has **21** fields in the current tree, not 19; the count in the original note was stale or miscounted. It does not change the conclusion.). The value is always 0, so the gate never passes.
-- **Validity (partially validated 2026-10-13):** Valid on the Alloy side, high confidence. The upstream gate is **not independently verified**.
-- **Verified:**
-  - `enable_profile` is accepted and passed through: `mongodb.go:48` and `:71` (component), `mongodb_exporter.go:57` and `:114` (integration), default `false`.
-  - Alloy never sets `ProfileTimeTS`. The `exporter.Opts` literal at `mongodb_exporter.go:96-118` has 21 fields and none is `ProfileTimeTS`, and the string does not occur in `mongodb_exporter.go` or `mongodb.go`.
-  - `ProfileTimeTS int` exists in `exporter.Opts` at `percona/mongodb_exporter` v0.47.2 (pkg.go.dev), and `go.mod:196` pins `v0.47.2`.
-  - The upstream CLI declares the flag `collector.profile-time-ts` with a default of `30` (seen in an upstream PR diff, **version not confirmed** to be v0.47.2). Alloy bypasses the CLI, so the field stays `0`.
-- **Not verified:** the upstream gate at `exporter.go:227` (`... && e.opts.ProfileTimeTS != 0`) and the claim that `exporter.New()` defaults only `Logger`. The only place I found the gate expression is the #7335 description, which is the claim itself, so it is not independent. I also only searched the two Alloy files above, not the whole `internal/` tree, so the "`grep -rn 'ProfileTimeTS' internal/` returns nothing" result is carried over from the original note.
-- **To finish verifying (local, a few minutes):** run `grep -rn 'ProfileTimeTS' internal/` in the alloy repo (expect no output), then read the gate in `$(go env GOMODCACHE)/github.com/percona/mongodb_exporter@v0.47.2/exporter/exporter.go` near line 227 and check `exporter.New()` for defaults. Then optionally prove the no-op: run with `enable_profile = true` against a MongoDB with profiling enabled and confirm no profile metrics appear.
-- **Doc impact today:** the doc says only "Enables collecting profile metrics." with default `false` (`prometheus.exporter.mongodb.md:53`), with no caveat, so a reader is misled. This is a deliberate choice already recorded below.
-- **Fix options:** expose a `profile_time_ts` argument, or set a non-zero default in `Convert()`. Upstream's CLI default of `30` (unconfirmed for v0.47.2) is the natural value to match.
-- **Doc state:** deliberately unchanged; becomes correct once the source is fixed. Do not add a "currently has no effect" note, and do not add a `mongos` caveat to this argument — that caveat is correct for `currentop_slow_time`, whose own gate Alloy does satisfy.
-- **User impact (author's reading):** users enable profiling and get no profiling metrics, with no warning.
+- **Docs:** left unchanged on purpose; accurate once fixed. Do not add a "no effect" note, and do not add a `mongos` caveat here (that applies to `currentop_slow_time`).
 
-### Item 3: `prometheus.exporter.mssql`: `connection_name` never produces a metric label
+### Item 3: `prometheus.exporter.mssql`: `connection_name` never becomes a metric label
 
-- **Status:** Open
-- **Type:** Non-functional argument (two independent defects, both must be fixed)
+- **Verdict:** real, low severity. A non-empty `connection_name` enables the `up` and `scrape_duration_seconds` metrics but no label is created, because Alloy passes a non-nil empty label map to the SQL exporter library. Details: [code-issues.md](code-issues.md#item-3-prometheusexportermssql-connection_name-never-becomes-a-metric-label)
+- **Type:** Non-functional argument
 - **Source PR:** [#7335]
-- **Cause (a):** `internal/static/integrations/mssql/sql_exporter.go:137` passes `prometheus.Labels{}`, which is non-nil, so the `if constLabels == nil` branch at `target.go:62` never runs. `constLabelPairs` (`target.go:73-74`) stays empty, so `upDesc` and `scrapeDurationDesc` (`target.go:91-92`) get no constant labels.
-- **Cause (b):** passing nil alone still fails. `config.TargetLabel` is an unassigned package var (`config/config.go:36`), set only by a flag in `cmd/sql_exporter/main.go:51` that Alloy never runs. The result would be `prometheus.Labels{"": tname}`, an invalid empty label name. Alloy calls `NewTarget` directly (`sql_exporter.go:129`), so the `job.go:39` path that sets `config.TargetLabel` is not reached.
-- **Fix:** pass nil, and set `config.TargetLabel` before constructing the target.
-- **Doc state:** corrected to describe log-message behaviour, which is all `connection_name` does today (`target.go:61`). If the source is fixed, the description reverts to a label — and that label lands on **both** `up` and `scrape_duration_seconds`, not just uptime.
-- **User impact (author's reading):** users cannot tell SQL Server connections apart in metrics.
+- **Docs:** the doc at HEAD describes a label. If the source is fixed, keep describing the label. The part-06 doc wording was not checked.
 
-### Item 4: `prometheus.exporter.cloudwatch`: `static` block silently drops `period`, `length`, `delay`
+### Item 4: `prometheus.exporter.cloudwatch`: `static` block accepts `period`, `length` and `delay` but ignores them
 
-- **Status:** Open
+- **Verdict:** real, low severity. The static-job conversion never reads the three job-level values, so they have no effect. Details: [code-issues.md](code-issues.md#item-4-prometheusexportercloudwatch-static-block-accepts-period-length-and-delay-but-ignores-them)
 - **Type:** Silently ignored arguments
 - **Source PR:** [#7281] (open)
-- **Cause:** `StaticJob` declares all three as optional attributes ([internal/component/prometheus/exporter/cloudwatch/config.go][cloudwatch-config.go] L86-88), so a config setting them parses and runs with no warning. The conversion discards them: `toYACEMetrics(sj.Metrics, 0, 0)` at L330 hardcodes zeros, where discovery (L355) and custom_namespace (L381) pass the job values through. Root cause is that upstream `yaceConf.Static` has no `JobLevelMetricFields`.
-- **Precedent:** `StaticJob.NilToZero` hit the same problem and is patched in `toYACEStaticJob`. The in-code comment at config.go L89-93 reasons that this should either be removed from Alloy in a major release or contributed to YACE, and that it is patched in the static-job function to avoid breaking existing configs. The same argument applies to these three fields. Commit `e729082c1b` (2026-01-26) added `StaticJob.Period`/`.Length` and the zero-passing call site in the same change.
-- **Doc state:** documented in two places: the `static` section's no-effect note at cloudwatch.md L419-421, and the inheritance sentence in the `metric` section. Both need reverting if the source is fixed.
-- **User impact (author's reading):** the config parses cleanly and runs, but the user's timing settings are ignored.
+- **Docs:** the `static` table at HEAD does not list them. Per the part-04 PR description, that branch documents them as having no effect (a note in `static` and an inheritance sentence in `metric`). That text was not read. Revert both if the source is fixed.
 
 **Item 5:** [Fixed](closed-items.md#item-5-prometheusexportercatchpoint-non-functional-component-removed)
 
 **Item 6:** [Fixed](closed-items.md#item-6-pyroscopeebpf-pyroscope_ebpf_pprof_samples_total-counts-bytes)
 
-### Item 7: `pyroscope.scrape`: default `scrape_timeout` is shorter than the default CPU profile duration
+**Item 7:** [Not a bug](closed-items.md#item-7-pyroscopescrape-default-scrape_timeout-shorter-than-the-default-cpu-profile-duration--not-a-bug)
 
-- **Status:** Open
-- **Type:** Bad default
-- **Source PR:** [#7099] (Copilot review thread on the args table; korniltsev-grafanista commented "this looks like a legit issue")
-- **Cause (Copilot's analysis, not independently verified):** the default `scrape_timeout` is `10s`. `ProcessCPU` delta profiling is enabled by default and the default delta duration is `scrape_interval - 1` (`14s`). The scrape loop applies `ScrapeTimeout` as the request context deadline, so an unconfigured component times out every default CPU profile request.
-- **Corroboration from the audit:** the `10s` default is confirmed — the doc wrongly claimed `"18s"` and was corrected to `"10s"`, and a fabricated "Must be larger than `scrape_interval`" constraint was removed at the same time. The 14s delta-duration half of the trace has no independent confirmation.
-- **Fix options:** change the source defaults, or choose and document a timeout that accommodates the 14-second request.
-- **User impact (author's reading):** a default-configured scrape of CPU profiles would time out.
+### Item 8: `prometheus.exporter.consul`: `server` without a scheme gives `instance` the value `unknown`
 
-### Item 8: `prometheus.exporter.consul`: scheme-less server address labels every target `instance="unknown"`
-
-- **Status:** Open
+- **Verdict:** real, medium severity. A `server` address without a scheme, including the doc's own `localhost:8500` example, gives every target `instance="unknown"`. Details: [code-issues.md](code-issues.md#item-8-prometheusexporterconsul-server-without-a-scheme-gives-instance-the-value-unknown)
 - **Type:** Wrong output
-- **Source PR:** [#7281] (Copilot review; the doc statement was then simplified in commit "Simplify a statement to avoid documenting a bug")
-- **Cause:** [internal/static/integrations/consul_exporter/consul_exporter.go][consul_exporter.go] L59-65 parses `server` directly and returns `u.Host`. Go reads `consul.example.com:8500` as Scheme=`consul.example.com`, Opaque=`8500`, Host=`""`.
-- **Correction to the earlier catalog wording:** the label is not left empty. The empty key hits [internal/component/prometheus/exporter/exporter.go][exporter.go] L93, `if instanceKey == "" { instanceKey = "unknown" }` — a line whose own comment says "in case of a bug". Every target is therefore labelled `instance="unknown"`. Verified empirically 2026-10-01 with a scratch Go program, for `consul.example.com:8500`, `localhost:8500` and a bare hostname.
-- **Correction to the earlier fix options:** "document that the scheme is required" is not a valid option, because it is false. Upstream normalises scheme-less input (`consul_exporter@v0.8.0/pkg/exporter/consul_exporter.go` L132-141, `if !strings.Contains(uri, "://") { uri = "http://" + uri }`) but only on a local variable, so `c.Server` is never mutated and connections succeed. Only the instance key breaks.
-- **Fix:** apply the same `strings.Contains(uri, "://")` normalisation before deriving the instance key.
-- **Doc state:** a workaround shipped on part-04 — consul.md now says to set `server` to an address that includes a scheme. If the source is fixed, the doc can go back to describing the scheme as optional.
-- **User impact (author's reading):** metrics carry a useless `instance` label, which breaks per-server grouping and alerting.
+- **Source PR:** [#7281] (open)
+- **Docs:** part-04 (unmerged, head `c5dc82d`) tells users to set `server` to an address that includes a scheme. That is a workaround, since the exporter accepts the address. Revisit it if the source is fixed.
 
-### Item 9: `prometheus.exporter.github`: `github_rate_limit` has no Alloy default, so GitHub App re-auth never fires
+### Item 9: `prometheus.exporter.github`: `github_rate_limit` has no Alloy default, so GitHub App re-auth never triggers
 
-- **Status:** Open. **Missed its intended PR** — recorded 2026-10-01 to be raised at part-05 PR creation; [#7284] merged Oct 7 without it.
+- **Verdict:** real, medium severity. The component default is `0` instead of the intended `15000`, so the re-authentication threshold is never met. Details: [code-issues.md](code-issues.md#item-9-prometheusexportergithub-github_rate_limit-has-no-alloy-default-so-github-app-re-auth-never-triggers)
 - **Type:** Missing default
-- **Source branch:** `docs/validate-prometheus-component-docs-part-05`
-- **Cause:** [github.go][github.go] `DefaultArguments` is `Arguments{ APIURL: github_exporter.DefaultConfig.APIURL }` — it pulls `APIURL` from `DefaultConfig` but not `GitHubRateLimit`, and `Convert()` passes `a.GitHubRateLimit` straight through. The static YAML path gets `15000` via `UnmarshalYAML` (`*c = DefaultConfig` in [github_exporter.go][github_exporter.go]); the Alloy path gets the float64 zero value.
-- **Consequence:** traced in `githubexporter/github-exporter@v1.3.1`, `exporter/prometheus.go` L26-37 `Collect()` → `if e.Config.GitHubApp()` → `isTokenExpired()` → L87-90 `if limit < e.Config.GitHubRateLimit()`. With 0, `limit < 0` is never true, so `SetAPITokenFromGitHubApp()` never runs.
-- **Re-verified 2026-10-09** against the current tree: `DefaultArguments` still sets only `APIURL`.
-- **Fix options:** add `GitHubRateLimit: github_exporter.DefaultConfig.GitHubRateLimit` to `DefaultArguments`. This is the only real fix. Documenting `0` is not an option: it would describe the bug as intended behaviour, and `0` disables re-authentication.
-- **Doc state (corrected 2026-10-13):** the doc's default of `15000` is the **intended** value (`DefaultConfig.GitHubRateLimit`, and the field comment in `github_exporter.go` says "Default is 15,000"). It is correct as a statement of intent but does not match Alloy's actual behaviour, which is `0`. This is a source defect, not a doc bug. Leave the doc at `15000`. The description "Threshold for GitHub App rate limit to trigger re-authentication" is accurate and needs no change.
-- **User impact (author's reading):** GitHub App credentials silently stop refreshing unless the user sets the value explicitly.
+- **Source PR:** none yet. [#7284] (docs part 05) merged without it.
+- **Docs:** leave the default at `15000`. It is the intended value.
 
-### Item 10: `prometheus.exporter.github`: partial GitHub App configuration is silently ignored
+### Item 10: `prometheus.exporter.github`: a partial GitHub App configuration is silently ignored
 
-- **Status:** Open. Raised 2026-10-01, then dropped by the author's call; never filed and never documented. Same missed PR as item 9.
+- **Verdict:** real, low severity. Setting only one or two of the three GitHub App arguments gives no error and no log line, and the exporter runs unauthenticated or on the token. Details: [code-issues.md](code-issues.md#item-10-prometheusexportergithub-a-partial-github-app-configuration-is-silently-ignored)
 - **Type:** Silently ignored config
-- **Source branch:** `docs/validate-prometheus-component-docs-part-05`
-- **Cause:** the GitHub App auth guard in `New()` ([github_exporter.go][github_exporter.go]) requires all three of `github_app_id`, `github_app_installation_id` and `github_app_key_path`. A config that sets only one or two falls through the conjunction quietly instead of erroring, and the component starts unauthenticated. Exact line numbers were not recorded.
-- **Fix options:** reject a partial set in `Validate()`, or log a warning.
-- **Doc state:** not documented. Documenting it was considered and rejected, because the health section already covers the general case and the specific case is silent misconfiguration rather than an error state.
-- **User impact (author's reading):** a typo'd or half-finished GitHub App block looks accepted and silently degrades to the unauthenticated rate limit.
-- **Confidence:** medium. The guard shape was read from source; the exact lines were not recorded.
+- **Source PR:** none yet. [#7284] (docs part 05) merged without it.
+- **Docs:** not documented, by choice. The health section already covers invalid configuration in general.
 
-### Item 11: `prometheus.exporter.cadvisor`: `allowlisted_container_labels` default is `[""]`, not `[]`
+**Item 11:** [Not a bug](closed-items.md#item-11-prometheusexportercadvisor-allowlisted_container_labels-default--not-a-bug)
 
-- **Status:** Open
-- **Type:** Bad default, or a doc/source mismatch — needs a developer decision on which
-- **Source PR:** [#7270] (part 03)
-- **Cause:** `SetToDefault` sets `[]string{""}` at cadvisor.go L58, reinforced by a guard at L81-82. The doc documents `[]`.
-- **Open question:** is the doc wrong, or is `[""]` an implementation detail that should not surface to users? Settled separately and not in dispute: `[]` **is** the correct rendering for a nil optional `list(string)` — the precedent is cadvisor's own `enabled_metrics`. Only the `[""]` case is genuinely open.
-- **Not to be confused with** the `disabled_metrics` default, which was a doc-only issue and is resolved — see the appendix.
-- **User impact (author's reading):** unclear without the developer answer; at minimum the documented default does not match the code.
+### Item 12: `prometheus.echo`: an unknown `format` is accepted and falls back to `text`
 
-### Item 12: `prometheus.echo`: `format` is never validated, so the component can never report unhealthy
-
-- **Status:** Open
+- **Verdict:** possible issue, low severity, needs a dev decision. An unknown `format` gives a warning and `text` output with no error or health signal, where the doc says it "Must be `text` or `openmetrics`". Whether the leniency is intended is the open question. Details: [code-issues.md](code-issues.md#item-12-prometheusecho-an-unknown-format-is-accepted-and-falls-back-to-text)
 - **Type:** Missing validation
 - **Source PR:** [#7270] (part 03)
-- **Cause:** `Component.Update()` never validates `Format` and never returns a non-nil error. An unrecognised `format` value falls through to a logged warning and a `text` default. `New()` only fails if `Update()` fails, so the component has no path to an unhealthy state.
-- **Fix options:** validate the enum in `Validate()` or `Update()` and return an error, or accept the fall-through as intended.
-- **Doc state:** handled as a doc fix — the standard "only reported as unhealthy if given an invalid configuration" boilerplate was false on this page and was corrected. The source side was never raised with developers.
-- **User impact (author's reading):** a misspelled `format` produces `text` output and a log line, with no health signal.
+- **Docs:** updated to describe the current behaviour (working tree, uncommitted). Revisit if validation is added.
 
 **Item 13:** [Fixed](closed-items.md#item-13-pyroscopeebpf-documented-debug-information-capability-is-not-implemented)
 
-### Item 14: `pyroscope.java`: `thread` block silently no-ops when both `frame` and `label_name` are unset
-
-- **Status:** Open; outcome unknown
-- **Type:** Silently ignored config
-- **Source branch:** `threads_fix`, reviewed 2026-08-10 (pre-dates the audit; no PR number recorded)
-- **Cause:** `loop.go` treats the both-unset case as a no-op. The block is accepted and does nothing, with no error or warning.
-- **Fix options:** reject the combination in `Validate()`, or document "at least one of `frame` or `label_name` must be set for the block to have any effect". A doc note was proposed at review time; whether that or a source fix landed is unknown.
-- **Distinct from L1**, which concerns `per_thread` in JFR mode.
-- **User impact (author's reading):** a `thread` block that looks configured produces no per-thread data.
+**Item 14:** [Not applicable](closed-items.md#item-14-pyroscopejava-thread-block-silently-no-ops-when-both-frame-and-label_name-are-unset--not-applicable)
 
 ### Item 15: `oauth2` block: `signature_algorithm` is validated under the wrong grant type
 
-- **Status:** Open
-- **Type:** Validation under the wrong condition
-- **Source branch:** `feat/http-oauth2-add-client-private-key`, reviewed 2026-10-08 (no PR number recorded)
-- **Scope note:** this is the shared `oauth2` block partial, used by `prometheus.*` and `remote.*` component pages, so it is in scope for the audit even though it lives in `common/config`.
-- **Cause:** [internal/component/common/config/types.go][types.go] L489-498 places the RS256/RS384/RS512 check under `case grantTypeClientCredentials`. Upstream validates it under jwt-bearer (`prometheus/common` `http_config.go:444-450`). Invalid algorithms are therefore silently accepted for the grant type that actually uses them.
-- **Confirmed reachable:** `OAuth2Config.Validate()` is called by the syntax decoder via `syntax.Validator` (`syntax/internal/value/decode.go:105-108`, `syntax/vm/vm.go:99`). It is not dead code. `HTTPClientConfig.Validate()` does not call it.
-- **Fix:** move the check to the jwt-bearer branch to match upstream.
-- **User impact (author's reading):** a bad signature algorithm is accepted at load time and fails later, or silently misbehaves.
+- **Verdict:** cannot be verified against the current source. The current shared `oauth2` block has no grant type, `signature_algorithm` or other JWT fields: `OAuth2Config` in `internal/component/common/config/types.go` has only the basic fields, and its `Validate()` (from `:432`) checks `client_id`, a client secret, and `token_url`. The finding comes from the feature branch `feat/http-oauth2-add-client-private-key`. Its fetch history names PR 7130, which is **unverified**, and the branch code was not read.
+- **Type:** Validation under the wrong condition, in the branch
+- **Scope note:** the shared `oauth2` block is used by many `prometheus.*`, `remote.*` and `discovery.*` pages, so the PR matters for the docs when it merges.
+- **Finding to raise on that PR (from earlier notes, not re-verified):** the RS256/RS384/RS512 check sits under the client-credentials case. Upstream `prometheus/common` validates it under jwt-bearer. The fix is to move it.
+- **Next step:** confirm 7130 is the right PR and whether it is relevant. If so, raise the finding there. If not, close as not applicable.
 
 ### Item 16: `oauth2` converter drops `Iss`, `Audience` and `Claims`
 
-- **Status:** Open
-- **Type:** Silent data loss in the converter
-- **Source branch:** `feat/http-oauth2-add-client-private-key`, reviewed 2026-10-08 (no PR number recorded)
-- **Cause:** `toOAuth2` in [internal/converter/internal/common/http_client_config.go][http_client_config.go] omits the three fields when building the Alloy config.
-- **Fix:** carry all three through the conversion.
-- **User impact (author's reading):** a converted static or Prometheus config loses JWT-bearer claims with no warning, and authentication changes behaviour after migration.
+- **Verdict:** cannot be verified against the current source, for the same reason as Item 15. In the current tree `toOAuth2` (`internal/converter/internal/common/http_client_config.go`) maps only `ClientID`, `ClientSecret`, `ClientSecretFile`, `Scopes`, `TokenURL`, `EndpointParams`, the proxy config and TLS config, which matches the current `OAuth2Config`. The three fields would only matter once the shared block supports JWT bearer.
+- **Type:** Silent data loss in the converter, in the branch
+- **Finding to raise on that PR (from earlier notes, not re-verified):** the converter omits `Iss`, `Audience` and `Claims`, so a converted config loses JWT-bearer claims. The fix is to carry them through.
+- **Next step:** as for Item 15.
 
 ---
 
@@ -225,12 +157,12 @@ These are behaviours or open questions, not confirmed defects. Each needs a deve
 
 | # | Component | Finding | Status | Source |
 |---|---|---|---|---|
-| L1 | `pyroscope.java` | `per_thread` does not apply to async-profiler JFR mode; korniltsev believes enabling it would break profiling (untested) and suggests removing or deprecating the flag. Tracked in [issue #5340]. A replacement already exists: the `threads_fix` branch adds a `thread` block (`frame`, `label_name`, `regex`) under `profiling_config` and removes `tlab`, and the doc now points from the `per_thread` admonition to it. | Open, tracked | [#7099] |
+| L1 | `pyroscope.java` | `per_thread` does not apply to async-profiler JFR mode; korniltsev believes enabling it would break profiling (untested) and suggests removing or deprecating the flag. Tracked in [issue #5340]. Earlier notes record a `thread` block replacement on a local branch (`threads_fix`). It is not in the current tree: `args.go` still has `tlab` and no `thread` block, and the doc at HEAD (`pyroscope.java.md:196-199`) only says `per_thread` doesn't apply to JFR output. | Open, tracked | [#7099] |
 | L2 | `pyroscope.ebpf` | `pyroscope_ebpf_profiling_sessions_total` is incremented right after `controller.Start` succeeds, so it counts sessions started, not completed. Same family of metric-semantics mismatch as item 6 (now in [closed-items.md](closed-items.md)). **The doc is not wrong** — it already reads "Number of profiling sessions started by the eBPF component" (verified 2026-10-09), so this is a metric-naming question only. | Open | [#7099] |
 | L3 | `remote.vault` | `data` handling accepts `string` and `[]byte` values and silently ignores other types (`internal/component/remote/vault/vault.go:279-293`). Possibly intended. | Open | [#7097], backport [#7118] |
 | L5 | `prometheus.exporter.azure` | `azure_cloud_environment` also accepts `ussec`, `azuresecret` and `azurepsecretcloud` in the vendored `webdevops/go-common` cloudconfig library (`cloudconfig.NewCloudConfig()`), none of which are documented. These and the documented `azurepprivatecloud` need `AZURE_CLOUD_CONFIG` / `AZURE_CLOUD_CONFIG_FILE` env vars to work. Needs a developer answer on whether these values are supported before documenting them. | Needs confirmation | [#7107], backport [#7267] |
 | L7 | `pyroscope.write` | `pyroscope_ebpf_debug_info_upload_bytes_total` is emitted by `pyroscope.write` but carries an `ebpf` prefix. Introduced in PR [#4948] alongside the ebpf `debug_info` block, and named for the feature rather than the emitting component. Git history shows no earlier or parallel copy in the `ebpf` package, so an initial "copy-paste bug" characterisation was explicitly withdrawn. **Explained by the code owner (Slack):** the metric was meant for the ebpf component and was then moved to `pyroscope.write`, which is why the name carries `ebpf`. He does not mind renaming it, but wants the whole debug-info feature to stay undocumented. Low severity, and moot for docs since the metric is undocumented. | Explained; rename optional and low priority | [#7099] |
-| L8 | `prometheus.exporter.cloudwatch` | A reviewer (dehaansa) asked what the sentence about `length` and `period` request windows means. The author reworked it from `config.go` comments but could not validate the behaviour inside YACE requests. | Needs developer or YACE confirmation | [#7281] |
+| L8 | `prometheus.exporter.cloudwatch` | A reviewer (dehaansa) asked what the sentence about `length` and `period` request windows means. The author reworked it from `config.go` comments but could not validate the behaviour inside YACE requests. The head commit of part-04 (`c5dc82d`, 2026-10-07) rewords it again: with no `length`, each metric's `length` equals its `period`, so Alloy takes the maximum period as `length` and the minimum as `period`. That wording still comes from `config.go` and was not checked against YACE. | Needs developer or YACE confirmation | [#7281] |
 
 ---
 
@@ -277,8 +209,7 @@ Two sub-questions from the same review:
 | [#7321]                                   | Second pass, `remote.*`                            | Merged                        | [#7330] merged            | None (content split from [#7270])     |
 | [#7119]                                   | Fix `pyroscope.ebpf` samples counter               | Merged (per author)           | Unknown                   | Resolves item 6                       |
 | [#7309]                                   | Remove `prometheus.exporter.catchpoint`            | Merged Oct 13 (per author)    | Unknown                   | Resolves item 5 (see [closed-items.md](closed-items.md))                       |
-| `feat/http-oauth2-add-client-private-key` | oauth2 block partial review, 2026-10-08            | Branch; no PR number recorded | —                         | Items 15, 16                          |
-| `threads_fix`                             | `pyroscope.java` `thread` block review, 2026-08-10 | Branch; no PR number recorded | —                         | Item 14                               |
+| `feat/http-oauth2-add-client-private-key` | oauth2 block partial review, 2026-10-08            | Branch; fetch history names PR 7130 (unverified) | —                         | Items 15, 16                          |
 
 ---
 
@@ -286,14 +217,10 @@ Two sub-questions from the same review:
 
 Open questions that should be settled before this catalog is presented.
 
-- **Items 9 and 10 have no home.** [#7284] merged Oct 7 without them. They need a tracking issue or a follow-up PR.
+- **Items 9 and 10 have no home.** [#7284] merged Oct 7 without them. Both are written up in [code-issues.md](code-issues.md) and still need a tracking issue or a follow-up PR.
 - **#7119:** backported to any release branch?
-- **Item 7:** does the source behave as Copilot described (10s timeout against a 14s default CPU delta)? The 10s default is confirmed; the 14s half is not independently verified.
-- **Item 10:** exact line numbers for the GitHub App auth guard were never recorded. Re-read before filing.
-- **Item 12:** is the missing `format` validation worth fixing, or is the fall-through intended?
-- **Item 14:** did a doc note or a source fix land on the `threads_fix` branch?
-- **Items 15 and 16:** no PR number was recorded for `feat/http-oauth2-add-client-private-key`. Find it before filing.
-- **Items 1, 2, 3, 4, 8, 11, 13 and L1 to L3:** does a tracking issue or fix PR already exist for each?
+- **Items 15 and 16:** is PR 7130 (named in the branch's fetch history) the right PR, and is it relevant to the audit? Not verified.
+- **Items 1, 2, 3, 4, 8, 13 and L1 to L3:** does a tracking issue or fix PR already exist for each?
 - **Total number of components audited**, for any defects-per-component rate. Not known.
 
 Closed during this pass, 2026-10-09:
@@ -319,13 +246,13 @@ Closed during this pass, 2026-10-09:
 
 Doc-side issues the review turned up that are **not yet fixed**. None are source defects. Re-checked against the `alloy` working tree on 2026-10-13 (branch `docs/correct-minor-errors-component-docs`, cut from `main`). The seven rows that are fixed have moved to [closed-items.md](closed-items.md#docs-only-fixes-from-the-overview-appendix).
 
-Two open branches are not in that tree: `docs/validate-prometheus-component-docs-part-04` (consul, cloudwatch; [#7281]) and `docs/validate-prometheus-component-docs-part-06` ([#7335]). Rows whose fix belongs on one of them are marked, and I did not check whether those branches already contain the fix.
+Two open branches are not in that tree: `docs/validate-prometheus-component-docs-part-04` (consul, cloudwatch; [#7281], open, head `c5dc82d`) and `docs/validate-prometheus-component-docs-part-06` ([#7335]). Rows whose fix belongs on one of them are marked. For part-04, only the consul scheme wording and the head commit's cloudwatch `length`/`period` wording were read; the cloudwatch rows below were not checked on that branch.
 
 | Component | Issue | Resolution |
 |---|---|---|
 | `prometheus.exporter.cloudwatch` | `dimension_name_requirements` Default cell renders `{}` (map syntax) on a `list(string)`. | Doc cell notation only. **Still unfixed at HEAD:** the cell reads `{}` at `prometheus.exporter.cloudwatch.md:219` and `:324`. **Fix belongs on part-04** ([#7281]), which is unmerged and not in this tree. Lowest priority. |
 | `prometheus.exporter.cloudwatch` | The Usage section is not a minimal `"<LABEL>"` skeleton, unlike every other validated exporter topic. | Structure, not source. Raised for a developer opinion but carries no code change. **Still the case at HEAD:** Usage is a full example with a `discovery` block. **Belongs on part-04** if it changes. |
-| `prometheus.scrape` | `scheme` default is `"http"` in source but documented as empty; `body_size_limit` typed `int` in the doc versus `units.Base2Bytes` in source, which accepts both `104857600` and `"100MiB"`. | Doc drift found in a pre-audit stress-test session. **Still unfixed at HEAD, source re-verified 2026-10-13:** `scrape.go:163` sets `Scheme: "http"` while the doc Default cell is blank (`prometheus.scrape.md:82`), and `scrape.go:92` types `BodySizeLimit` as `units.Base2Bytes` while the doc says `int` (`prometheus.scrape.md:54`). Doc-only fix. `prometheus.scrape` is not among the components known to be in the two open branches, so it can go on any docs branch. |
+| `prometheus.scrape` | `scheme` default is `"http"` in source but documented as empty; `body_size_limit` typed `int` in the doc versus `units.Base2Bytes` in source, which accepts both `104857600` and `"100MiB"`. | Doc drift found in a pre-audit stress-test session. **Still unfixed at HEAD, source re-verified 2026-10-13:** `scrape.go:163` sets `Scheme: "http"` while the doc Default cell is blank (`prometheus.scrape.md:82`), and `scrape.go:92` types `BodySizeLimit` as `units.Base2Bytes` while the doc says `int` (`prometheus.scrape.md:54`). Doc-only fix. **Deferred:** the `prometheus.scrape` topic is due for a full audit, and these fixes will be applied then. `prometheus.scrape` is not among the components known to be in the two open branches. |
 | `oauth2` block | `client_id` Required documented as `no`; `Validate()` enforces it identically to `token_url`. | **Changed, but the doc and the code still disagree (checked 2026-10-13).** The shared partial (`shared/reference/components/oauth2-block.md`) now shows `client_id` and `token_url` both as Required `no`, so the original inconsistency between them is gone. But `OAuth2Config.Validate()` (`internal/component/common/config/types.go`, from line 432) rejects a block that lacks `client_id`, lacks `token_url`, or has neither `client_secret` nor `client_secret_file`, while the struct tags mark all of these `optional`. Whether the table should say `yes` depends on how the docs treat attributes enforced in `Validate()`, which I did not check. **Needs a convention decision.** |
 
 [auth.go]: https://github.com/grafana/alloy/blob/main/internal/component/remote/vault/auth.go

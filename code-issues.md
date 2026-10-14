@@ -200,6 +200,42 @@ Two defects in one function. Both corrupt the connection URL and put credential 
 
 ---
 
+### Issue 10: `prometheus.exporter.postgres`: `query_length` has no Alloy default, so query text is truncated to nothing
+
+- **What happens:** in a `stat_statements` block with `include_query = true` and no `query_length`, the collected statement query text is expected to be empty. The documented default of `120` is never applied on the Alloy path.
+- **Why (high level):** `120` is the default of an upstream kingpin CLI flag, which only applies when the standalone `postgres_exporter` binary builds the collector from flags. Alloy supplies a config struct instead, which takes an early return and reads the value verbatim. Alloy never sets a default, so the field keeps its `uint` zero value.
+- **Where:** Alloy: `internal/component/prometheus/exporter/postgres/postgres.go:41` (`DefaultArguments` sets `StatStatementFlags: nil`, and the nested struct has no `SetToDefault`), `:82` (`QueryLength uint` tagged optional), `:114` (passed through `Convert()`). Upstream fork: `collector/pg_stat_statements.go:55` (flag default `"120"`), `:85-89` (config path, early return, takes `QueryLength` as given), `:118` (the CLI fallback path that uses the flag).
+- **The unguarded use:** `collector/pg_stat_statements.go:243` does `fmt.Sprintf(pgStatStatementQuerySelect, c.statementLength)` with no lower bound. The template at `:166` is ``LEFT(pg_stat_statements.query, %d) as query,``, so a zero produces `LEFT(pg_stat_statements.query, 0)`.
+- **Contrast with `limit` on the same struct:** `:247-249` does apply a guard, `statementLimit := defaultStatementLimit` then `if c.statementLimit > 0`. That is why the documented default of `100` for `limit` is effectively correct and the documented `120` for `query_length` is not. The two adjacent fields are handled differently.
+- **Only reachable with `include_query = true`:** the `Sprintf` sits inside `if c.includeQueryStatement` at `:242`, so a `stat_statements` block that leaves `include_query` at `false` is unaffected.
+- **Not confirmed:** that `LEFT(col, 0)` returns an empty string rather than raising an error was not tested against a live PostgreSQL. Standard SQL semantics suggest empty, but the end-to-end behaviour was not observed.
+- **Repro (not run):** configure a `stat_statements` block with `include_query = true` and no `query_length`, then check the query label on the `stat_statements` metrics.
+- **Possible fix:** set a default for `QueryLength` in the Alloy component, or add a `> 0` guard upstream to match the one `limit` already has. The guard is probably better, since it also protects the standalone binary if a user passes `0`.
+- **Impact:** low frequency, high confusion. The feature silently produces empty query text, and the reference doc states a default that never applies.
+- **Docs:** no change proposed. The doc says `120`, which is the intended value, and documenting `0` would describe the bug as intended behaviour. Same disposition as Issue 6. The doc becomes correct as soon as this is fixed.
+- **Checked:** by reading the Alloy source and the pinned fork, `github.com/grafana/postgres_exporter v0.0.0-20260225165717-9c2c77e3702a` (a `replace` directive in `go.mod` points `prometheus-community/postgres_exporter` at this fork). Not run.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
+
+---
+
+### Issue 11: `prometheus.exporter.postgres`: a single keyword/value DSN stops the component from starting
+
+- **What happens:** one `data_source_names` entry in libpq keyword/value form, such as `host=localhost port=5432 dbname=mydb user=u`, makes the component fail with `cannot parse DSN: invalid connection protocol:`. The same DSN works if a second DSN is added to the list.
+- **Why (high level):** the instance key is derived by parsing the DSN with a URL parser, which only understands the URI form. The parse happens before the integration is constructed, so a parse failure aborts the whole component rather than just degrading the label. When the list holds anything other than exactly one DSN, the function returns the component ID early and never parses, which is why two bad DSNs succeed where one fails.
+- **Where:** `internal/static/integrations/postgres_exporter/postgres_exporter.go:100` (`parsePostgresURL` wraps `pq.ParseURL`), `:79-82` (`InstanceKey` turns a parse error into a returned error), `:71-78` (the `len(dsn) != 1` early return that skips parsing entirely). The ordering is in `internal/static/integrations/integration.go:55-62`: `NewIntegrationWithInstanceKey` calls `InstanceKey` first and returns on error, before `cfg.NewIntegration`.
+- **The exporter itself is fine with it:** the DSNs are passed through to `postgres_exporter.NewExporter` unchanged, and `lib/pq` accepts keyword/value DSNs for connections. Only the instance-key derivation rejects them.
+- **Doc relevance:** the reference page points readers at the PostgreSQL `LIBPQ-CONNSTRING` documentation for the format of `data_source_names`, and that page documents both the URI form and the keyword/value form. A reader following that link can reasonably choose the form that breaks the component.
+- **Repro (replicated, Alloy not run):** `InstanceKey` and `parsePostgresURL` were copied into a standalone Go program using the pinned `github.com/lib/pq v1.12.3` and run across DSN forms. URI forms returned simplified DSNs as expected, for example `postgresql://u:p@localhost:5432/mydb?sslmode=disable` gave `postgresql://localhost:5432/mydb`, and credentials were stripped in every case. `host=localhost port=5432 dbname=mydb user=u password=p` returned the parse error above. Two DSNs returned the component ID without parsing either. Alloy itself was not started and no PostgreSQL server was contacted.
+- **Possible fix:** fall back to the component ID when the DSN can't be parsed, rather than returning an error, so the label degrades instead of the component failing. Parsing the keyword/value form as well would be a larger change.
+- **Impact:** medium where it is hit. The component doesn't start, and the error names DSN parsing rather than the DSN format, so the cause isn't obvious.
+- **Docs:** no change applied yet. If the fix is declined, a doc guard is the fallback, saying that `data_source_names` entries must use the URI form. That is the same shape as the consul wording in Issue 5.
+- **Checked:** by reading the Alloy source and by running the replication described above, on branch `docs/validate-prometheus-component-docs-part-07`. Not reproduced against a live PostgreSQL server.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
+
+---
+
 [grafana/alloy]: https://github.com/grafana/alloy
 [#7270]: https://github.com/grafana/alloy/pull/7270
 [#7281]: https://github.com/grafana/alloy/pull/7281

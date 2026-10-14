@@ -72,11 +72,11 @@ Issues are numbered in this file only. The index shows the matching item in [ove
 - **Where:** Alloy: `internal/static/integrations/mssql/sql_exporter.go:129-137` (name at `:131`, label map at `:137`). Library: `NewTarget` and `Collect` in `github.com/burningalchemist/sql_exporter` `target.go`.
 - **If fixed:** the library passes the same constant labels to the synthetic metrics and to `NewCollector`, so the label would probably appear on all of the exporter's metrics, not only the uptime ones. The collector code was not read.
 - **Likely also needed (unconfirmed):** passing `nil` may not be enough on its own. The label name comes from `config.TargetLabel`, which the library uses but whose default and assignment were not read. If it is empty, the label name would be empty and invalid. Worth checking when fixing.
-- **Not confirmed:** the library was read from its public `master` on 2026-10-13, not from the commit Alloy pins (`e19ac2aef3d7`, dated 2026-09-28, which could not be retrieved). The `master` file includes a mutex change merged 2026-04-10, so it is at least from the same period.
+- **Confirmed against the pinned library (updated 2026-10-14):** re-read at `github.com/burningalchemist/sql_exporter v0.0.0-20260312184457-9bf25f71582f`, the version `go list -m` resolves. Note an earlier entry here named `e19ac2aef3d7` as the pinned commit; that is a different pseudo-version that also sits in the module cache, and it is not the one that builds. Both defects hold in the resolved version: `target.go:60-65` only derives the label when `constLabels == nil`, and `config.TargetLabel` (`config/config.go:36`) is never assigned anywhere in Alloy's `internal/`.
 - **Repro (not run):** set `connection_name` and scrape the mssql exporter. `up` and `scrape_duration_seconds` should appear with no label for the name. With `connection_name` unset, neither metric should appear.
 - **Possible fix:** pass `nil` (or a map that already contains the label), and make sure the label name is set. Alternatively, drop or redefine the argument.
 - **Impact:** low. The `instance` label is the host from the connection string (`sql_exporter.go:78-85`), so connections to different hosts can still be told apart. Different connection strings to the same host cannot.
-- **Docs:** the doc at HEAD describes a label and does not mention that the argument is what enables `up` and `scrape_duration_seconds`. If the source is fixed, the doc should describe the label. The part-06 branch was not checked.
+- **Docs (updated 2026-10-14):** the part-06 doc no longer claims the name becomes a label, and it now states that setting `connection_name` enables the `up` and `scrape_duration_seconds` metrics and that the name is not applied as a label on them. Both halves of the argument's real behaviour are documented. If the source is fixed so the label does appear, remove the "doesn't apply the name as a label" sentence and describe the label instead.
 - **Checked:** by reading the Alloy source and the upstream `target.go`. Not run.
 
 **Related:** [#7335] (docs part 06).
@@ -164,6 +164,75 @@ Issues are numbered in this file only. The index shows the matching item in [ove
 - **Checked:** by reading the source and tests. Not run.
 
 **Related:** [#7270] (docs part 03).
+
+---
+
+## New unvalidated issues
+
+Entries below were found after the numbered list above and have not been through the same review. Treat them as drafts: the finding and the citations are recorded, but a second pair of eyes has not confirmed the reading of the code.
+
+### Issue 9: `prometheus.exporter.oracledb`: embedded credentials are not stripped correctly from `connection_string`
+
+Two defects in one function. Both corrupt the connection URL and put credential text into the `instance` label.
+
+**A. A password containing `@` splits the URL mid-secret**
+- **What happens:** with `connection_string = "oracle://scott:p@ss@db.example.com:1521/ORCL"`, the normalised URL comes out as `ss@db.example.com:1521/ORCL`. The host is wrong, so the connection is expected to fail, and the `instance` label on every metric becomes `ss@db.example.com:1521`, which is a fragment of the password.
+- **Why:** the code assumes a single `@`. `strings.Split(cs, "@")` returns three parts for this input, and `[1:]` rejoined keeps the tail of the password.
+- **Where:** `internal/static/integrations/oracledb_exporter/oracledb_exporter.go:121`.
+
+**B. A username with no password is not stripped at all**
+- **What happens:** with `connection_string = "oracle://scott@db.example.com:1521/ORCL"`, the normalised URL keeps the userinfo: `scott@db.example.com:1521/ORCL`. The `instance` label becomes `scott@db.example.com:1521`.
+- **Why:** `u.User.Password()` reports `set=false`, so the code takes the `else` branch, which strips only the `oracle://` prefix and leaves the userinfo in place.
+- **Where:** `internal/static/integrations/oracledb_exporter/oracledb_exporter.go:122-124` and the outer `else` at `:125-127`.
+
+**Root cause (shared):** the function reimplements userinfo stripping with string splitting, although `url.Parse` on `:116` has already produced the correct host in `u.Host`. `u.Host` is discarded. The function's own doc comment at `:104-105` states the intent, "strips an optional `oracle://` scheme and optional embedded credentials", which `u.Host` satisfies and the manual path does not.
+
+- **Blast radius:** the first return value is not only used for the label. `Convert()` passes it to `DatabaseConfig.URL` for the live connection, at `internal/component/prometheus/exporter/oracledb/oracledb.go:138` (the `database` block path) and `:149` (the deprecated top-level path). The `instance` label is the same string surfacing again through `InstanceKey()` at `oracledb_exporter.go:76-90`.
+- **Why `Validate()` does not catch it:** `validateOracleConnection` (`internal/component/prometheus/exporter/oracledb/oracledb.go:114`) only returns an error if `url.Parse` fails. Go accepts `@` inside userinfo, percent-encoding it to `scott:p%40ss`, and `Password()` returns `p@ss` correctly. No error, so both inputs reach the exporter.
+- **Why it was not caught earlier:** the only test, `internal/static/integrations/oracledb_exporter/oracledb_exporter_test.go:57-58`, uses `"oracle://u:p@host:1521/svc"`. That is a single `@` with the password set, which is the one shape both branches handle correctly.
+- **Repro (function replicated, Alloy not run):** `NormalizeConnectionString` and `InstanceKey` were copied into a standalone Go program and run against a range of inputs. Results: `oracle://scott:tiger@db.example.com:1521/ORCL` and `db.example.com:1521/ORCL` both give `db.example.com:1521`, as intended; `oracle://scott@db.example.com:1521/ORCL` gives `scott@db.example.com:1521`; `oracle://scott:p@ss@db.example.com:1521/ORCL` gives `ss@db.example.com:1521`. A separate run confirmed `url.Parse` returns no error for any of the three and that `u.Host` is `db.example.com:1521` in all of them. Alloy itself was not started and no Oracle database was contacted.
+- **Possible fix:** use `u.Host` instead of the manual splitting, appending `u.Path` where the service name is needed, and take the username from `u.User.Username()` in both the password-set and password-unset branches. Add test cases for a password containing `@` and for userinfo with no password.
+- **Impact:** medium where it is reachable, low in frequency. It needs either an `@` in the password, which is common in generated passwords, or the username-without-password form. The documented form, `oracle://user:pass@host:port/service_name` with a single `@`, is unaffected, and so is the recommended `database` block when `username` and `password` are set as separate arguments.
+- **Docs:** no change proposed. The reference doc does not steer users toward either broken form, and describing the behaviour would advertise the leak rather than help. If the fix is declined, a doc guard becomes the fallback, in the same shape as the consul wording in Issue 5.
+- **Checked:** by reading the Alloy source and by running the replication described above, on branch `docs/validate-prometheus-component-docs-part-07`. Not reproduced against a live Oracle database.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
+
+---
+
+### Issue 10: `prometheus.exporter.postgres`: `query_length` has no Alloy default, so query text is truncated to nothing
+
+- **What happens:** in a `stat_statements` block with `include_query = true` and no `query_length`, the collected statement query text is expected to be empty. The documented default of `120` is never applied on the Alloy path.
+- **Why (high level):** `120` is the default of an upstream kingpin CLI flag, which only applies when the standalone `postgres_exporter` binary builds the collector from flags. Alloy supplies a config struct instead, which takes an early return and reads the value verbatim. Alloy never sets a default, so the field keeps its `uint` zero value.
+- **Where:** Alloy: `internal/component/prometheus/exporter/postgres/postgres.go:41` (`DefaultArguments` sets `StatStatementFlags: nil`, and the nested struct has no `SetToDefault`), `:82` (`QueryLength uint` tagged optional), `:114` (passed through `Convert()`). Upstream fork: `collector/pg_stat_statements.go:55` (flag default `"120"`), `:85-89` (config path, early return, takes `QueryLength` as given), `:118` (the CLI fallback path that uses the flag).
+- **The unguarded use:** `collector/pg_stat_statements.go:243` does `fmt.Sprintf(pgStatStatementQuerySelect, c.statementLength)` with no lower bound. The template at `:166` is ``LEFT(pg_stat_statements.query, %d) as query,``, so a zero produces `LEFT(pg_stat_statements.query, 0)`.
+- **Contrast with `limit` on the same struct:** `:247-249` does apply a guard, `statementLimit := defaultStatementLimit` then `if c.statementLimit > 0`. That is why the documented default of `100` for `limit` is effectively correct and the documented `120` for `query_length` is not. The two adjacent fields are handled differently.
+- **Only reachable with `include_query = true`:** the `Sprintf` sits inside `if c.includeQueryStatement` at `:242`, so a `stat_statements` block that leaves `include_query` at `false` is unaffected.
+- **Not confirmed:** that `LEFT(col, 0)` returns an empty string rather than raising an error was not tested against a live PostgreSQL. Standard SQL semantics suggest empty, but the end-to-end behaviour was not observed.
+- **Repro (not run):** configure a `stat_statements` block with `include_query = true` and no `query_length`, then check the query label on the `stat_statements` metrics.
+- **Possible fix:** set a default for `QueryLength` in the Alloy component, or add a `> 0` guard upstream to match the one `limit` already has. The guard is probably better, since it also protects the standalone binary if a user passes `0`.
+- **Impact:** low frequency, high confusion. The feature silently produces empty query text, and the reference doc states a default that never applies.
+- **Docs:** no change proposed. The doc says `120`, which is the intended value, and documenting `0` would describe the bug as intended behaviour. Same disposition as Issue 6. The doc becomes correct as soon as this is fixed.
+- **Checked:** by reading the Alloy source and the pinned fork, `github.com/grafana/postgres_exporter v0.0.0-20260225165717-9c2c77e3702a` (a `replace` directive in `go.mod` points `prometheus-community/postgres_exporter` at this fork). Not run.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
+
+---
+
+### Issue 11: `prometheus.exporter.postgres`: a single keyword/value DSN stops the component from starting
+
+- **What happens:** one `data_source_names` entry in libpq keyword/value form, such as `host=localhost port=5432 dbname=mydb user=u`, makes the component fail with `cannot parse DSN: invalid connection protocol:`. The same DSN works if a second DSN is added to the list.
+- **Why (high level):** the instance key is derived by parsing the DSN with a URL parser, which only understands the URI form. The parse happens before the integration is constructed, so a parse failure aborts the whole component rather than just degrading the label. When the list holds anything other than exactly one DSN, the function returns the component ID early and never parses, which is why two bad DSNs succeed where one fails.
+- **Where:** `internal/static/integrations/postgres_exporter/postgres_exporter.go:100` (`parsePostgresURL` wraps `pq.ParseURL`), `:79-82` (`InstanceKey` turns a parse error into a returned error), `:71-78` (the `len(dsn) != 1` early return that skips parsing entirely). The ordering is in `internal/static/integrations/integration.go:55-62`: `NewIntegrationWithInstanceKey` calls `InstanceKey` first and returns on error, before `cfg.NewIntegration`.
+- **The exporter itself is fine with it:** the DSNs are passed through to `postgres_exporter.NewExporter` unchanged, and `lib/pq` accepts keyword/value DSNs for connections. Only the instance-key derivation rejects them.
+- **Doc relevance:** the reference page points readers at the PostgreSQL `LIBPQ-CONNSTRING` documentation for the format of `data_source_names`, and that page documents both the URI form and the keyword/value form. A reader following that link can reasonably choose the form that breaks the component.
+- **Repro (replicated, Alloy not run):** `InstanceKey` and `parsePostgresURL` were copied into a standalone Go program using the pinned `github.com/lib/pq v1.12.3` and run across DSN forms. URI forms returned simplified DSNs as expected, for example `postgresql://u:p@localhost:5432/mydb?sslmode=disable` gave `postgresql://localhost:5432/mydb`, and credentials were stripped in every case. `host=localhost port=5432 dbname=mydb user=u password=p` returned the parse error above. Two DSNs returned the component ID without parsing either. Alloy itself was not started and no PostgreSQL server was contacted.
+- **Possible fix:** fall back to the component ID when the DSN can't be parsed, rather than returning an error, so the label degrades instead of the component failing. Parsing the keyword/value form as well would be a larger change.
+- **Impact:** medium where it is hit. The component doesn't start, and the error names DSN parsing rather than the DSN format, so the cause isn't obvious.
+- **Docs:** no change applied yet. If the fix is declined, a doc guard is the fallback, saying that `data_source_names` entries must use the URI form. That is the same shape as the consul wording in Issue 5.
+- **Checked:** by reading the Alloy source and by running the replication described above, on branch `docs/validate-prometheus-component-docs-part-07`. Not reproduced against a live PostgreSQL server.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
 
 ---
 

@@ -23,7 +23,7 @@ Of the 16 numbered items, 8 are open code issues, 3 are fixed, 3 turned out not 
 | Pre-merge review findings (unmerged branch)            | 2     | 15, 16                   |
 
 - **Open code issues:** 3 medium (items 2, 8, 9) and 5 low (items 1, 3, 4, 10, 12). Item 12 is a possible issue that needs a dev decision. All 8 are in `prometheus.*`.
-- **Also tracked:** 6 lower-confidence findings (section 5) and 4 doc-side items not yet fixed (appendix).
+- **Also tracked:** 3 new unvalidated findings (section 2), 6 lower-confidence findings (section 5), and 4 doc-side items not yet fixed (appendix).
 
 ---
 
@@ -49,6 +49,18 @@ Item numbers are stable and match [closed-items.md](closed-items.md). [code-issu
 | 14 | `pyroscope.java` | `thread` block does nothing when `frame` and `label_name` are unset | [Not applicable](closed-items.md#item-14-pyroscopejava-thread-block-silently-no-ops-when-both-frame-and-label_name-are-unset--not-applicable) (block not in the tree) |
 | 15 | Shared `oauth2` block | `signature_algorithm` is validated under the wrong grant type | [Pre-merge finding](#3-pre-merge-review-findings), unmerged branch |
 | 16 | Shared `oauth2` converter | `iss`, `audience` and `claims` are dropped | [Pre-merge finding](#3-pre-merge-review-findings), unmerged branch |
+
+### New unvalidated findings
+
+Found during the part 07 validation pass, after the numbered items above. They're recorded in [code-issues.md](code-issues.md)'s "New unvalidated issues" section, haven't been through the same review, and have no item numbers yet.
+
+| Component | Issue | Severity |
+|---|---|---|
+| `prometheus.exporter.oracledb` | Embedded credentials aren't stripped correctly from `connection_string`. The connection URL is corrupted and a password fragment reaches the `instance` label. | [Medium](code-issues.md#issue-9-prometheusexporteroracledb-embedded-credentials-are-not-stripped-correctly-from-connection_string) |
+| `prometheus.exporter.postgres` | `query_length` has no Alloy default, so `include_query` is expected to produce empty query text. | [Low](code-issues.md#issue-10-prometheusexporterpostgres-query_length-has-no-alloy-default-so-query-text-is-truncated-to-nothing) |
+| `prometheus.exporter.postgres` | A single keyword/value DSN stops the component from starting, although two of them work. | [Medium](code-issues.md#issue-11-prometheusexporterpostgres-a-single-keywordvalue-dsn-stops-the-component-from-starting) |
+
+All three were found by diffing the reference doc against source, and all three are source fixes rather than doc fixes.
 
 ---
 

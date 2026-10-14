@@ -167,6 +167,39 @@ Issues are numbered in this file only. The index shows the matching item in [ove
 
 ---
 
+## New unvalidated issues
+
+Entries below were found after the numbered list above and have not been through the same review. Treat them as drafts: the finding and the citations are recorded, but a second pair of eyes has not confirmed the reading of the code.
+
+### Issue 9: `prometheus.exporter.oracledb`: embedded credentials are not stripped correctly from `connection_string`
+
+Two defects in one function. Both corrupt the connection URL and put credential text into the `instance` label.
+
+**A. A password containing `@` splits the URL mid-secret**
+- **What happens:** with `connection_string = "oracle://scott:p@ss@db.example.com:1521/ORCL"`, the normalised URL comes out as `ss@db.example.com:1521/ORCL`. The host is wrong, so the connection is expected to fail, and the `instance` label on every metric becomes `ss@db.example.com:1521`, which is a fragment of the password.
+- **Why:** the code assumes a single `@`. `strings.Split(cs, "@")` returns three parts for this input, and `[1:]` rejoined keeps the tail of the password.
+- **Where:** `internal/static/integrations/oracledb_exporter/oracledb_exporter.go:121`.
+
+**B. A username with no password is not stripped at all**
+- **What happens:** with `connection_string = "oracle://scott@db.example.com:1521/ORCL"`, the normalised URL keeps the userinfo: `scott@db.example.com:1521/ORCL`. The `instance` label becomes `scott@db.example.com:1521`.
+- **Why:** `u.User.Password()` reports `set=false`, so the code takes the `else` branch, which strips only the `oracle://` prefix and leaves the userinfo in place.
+- **Where:** `internal/static/integrations/oracledb_exporter/oracledb_exporter.go:122-124` and the outer `else` at `:125-127`.
+
+**Root cause (shared):** the function reimplements userinfo stripping with string splitting, although `url.Parse` on `:116` has already produced the correct host in `u.Host`. `u.Host` is discarded. The function's own doc comment at `:104-105` states the intent, "strips an optional `oracle://` scheme and optional embedded credentials", which `u.Host` satisfies and the manual path does not.
+
+- **Blast radius:** the first return value is not only used for the label. `Convert()` passes it to `DatabaseConfig.URL` for the live connection, at `internal/component/prometheus/exporter/oracledb/oracledb.go:138` (the `database` block path) and `:149` (the deprecated top-level path). The `instance` label is the same string surfacing again through `InstanceKey()` at `oracledb_exporter.go:76-90`.
+- **Why `Validate()` does not catch it:** `validateOracleConnection` (`internal/component/prometheus/exporter/oracledb/oracledb.go:114`) only returns an error if `url.Parse` fails. Go accepts `@` inside userinfo, percent-encoding it to `scott:p%40ss`, and `Password()` returns `p@ss` correctly. No error, so both inputs reach the exporter.
+- **Why it was not caught earlier:** the only test, `internal/static/integrations/oracledb_exporter/oracledb_exporter_test.go:57-58`, uses `"oracle://u:p@host:1521/svc"`. That is a single `@` with the password set, which is the one shape both branches handle correctly.
+- **Repro (function replicated, Alloy not run):** `NormalizeConnectionString` and `InstanceKey` were copied into a standalone Go program and run against a range of inputs. Results: `oracle://scott:tiger@db.example.com:1521/ORCL` and `db.example.com:1521/ORCL` both give `db.example.com:1521`, as intended; `oracle://scott@db.example.com:1521/ORCL` gives `scott@db.example.com:1521`; `oracle://scott:p@ss@db.example.com:1521/ORCL` gives `ss@db.example.com:1521`. A separate run confirmed `url.Parse` returns no error for any of the three and that `u.Host` is `db.example.com:1521` in all of them. Alloy itself was not started and no Oracle database was contacted.
+- **Possible fix:** use `u.Host` instead of the manual splitting, appending `u.Path` where the service name is needed, and take the username from `u.User.Username()` in both the password-set and password-unset branches. Add test cases for a password containing `@` and for userinfo with no password.
+- **Impact:** medium where it is reachable, low in frequency. It needs either an `@` in the password, which is common in generated passwords, or the username-without-password form. The documented form, `oracle://user:pass@host:port/service_name` with a single `@`, is unaffected, and so is the recommended `database` block when `username` and `password` are set as separate arguments.
+- **Docs:** no change proposed. The reference doc does not steer users toward either broken form, and describing the behaviour would advertise the leak rather than help. If the fix is declined, a doc guard becomes the fallback, in the same shape as the consul wording in Issue 5.
+- **Checked:** by reading the Alloy source and by running the replication described above, on branch `docs/validate-prometheus-component-docs-part-07`. Not reproduced against a live Oracle database.
+
+**Related:** docs part 07, branch `docs/validate-prometheus-component-docs-part-07`. No PR open yet.
+
+---
+
 [grafana/alloy]: https://github.com/grafana/alloy
 [#7270]: https://github.com/grafana/alloy/pull/7270
 [#7281]: https://github.com/grafana/alloy/pull/7281

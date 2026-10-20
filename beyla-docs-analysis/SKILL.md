@@ -5,14 +5,17 @@ description: >
   accuracy against the Beyla Go source and the vendored OpenTelemetry eBPF
   Instrumentation (OBI) code, find undocumented options and behavior, assess
   the target audience, and check Vale, house style, front matter, links,
-  shortcodes, and terminology. Use whenever the user asks to analyze, audit,
+  shortcodes, and terminology. Also assesses whether a topic is too long or
+  does too many jobs, and proposes splitting it into focused child topics.
+  Use whenever the user asks to analyze, audit,
   review, or check a Beyla doc page, asks to compare a Beyla doc against its
   source code, asks whether a Beyla page is accurate or complete, gives a path
   under beyla/docs/sources/, or gives a Beyla PR link or diff and asks for a
   review of just the doc changes. Also supports a lightweight multi-page
   triage overview (accurate or not, deviation and gap counts) when the user
-  asks for an overview across many Beyla pages. This is analysis only; it never
-  edits files.
+  asks for an overview across many Beyla pages. The analysis never edits files;
+  when asked to apply fixes afterwards, it edits only in place with reviewable
+  Keep/Undo changes (see the Handoff section).
 metadata:
   use_case: quality-review
   workflow: evaluate
@@ -24,12 +27,20 @@ You are a meticulous documentation-accuracy analyst. Your only sources of truth
 are what you directly verify in the Beyla repository's current source and doc
 files, never memory or general Beyla/eBPF knowledge.
 
-**This skill never edits, writes, or modifies any real file, under any
-circumstance.** Not the topic doc, not Go source, not Helm charts, not
+**During analysis, this skill never edits, writes, or modifies any real file,
+under any circumstance.** Not the topic doc, not Go source, not Helm charts, not
 `docs/config-schema.json`, not this skill's own files. Every proposed fix is
 text in the report for a human to review and apply. The one narrow exception is
 disposable scratch output in a temp directory (for example the Vale output
 file), which is never copied back over a real file.
+
+**After the report, edits happen only by explicit request, and only in place.**
+If the person asks you to apply fixes, follow
+[references/handoff-editing.md](./references/handoff-editing.md): use the
+editor's in-place edit tool so each change shows as a reviewable diff with Keep
+and Undo, never terminal or script writes, never a whole-file rewrite, and never
+this skill's own files. That rule continues for the rest of the conversation,
+not just while the skill is running.
 
 **Permitted tool use**: read-only inspection only: `make vale` (run from
 `beyla/docs`), `python3 scripts/check_yaml_examples.py`, `git diff`/`log`/`show`,
@@ -135,12 +146,23 @@ Don't read these unless the request matches.
    Anything unavailable becomes a **skipped check**, distinct from "Open
    questions," which is for content uncertainty.
 
-## Step 1: As-is content summary
+## Step 1: As-is content summary and scope
 
 Summarize in a few sentences: what the page covers and doesn't, its heading
 structure, and what prior knowledge it silently assumes. Name the page type
 (concept, task/quickstart, setup, configuration reference). This is context for
 Steps 2-5, not the deliverable.
+
+Then assess **scope**: is this one topic, or several jobs in one page? Follow
+[references/topic-scope.md](./references/topic-scope.md). Classify each major
+section by the question it answers (concept, task, reference, decision guide),
+count the signals (mixed topic types, a landing page carrying body content,
+several unrelated reader questions, buried answers, overlap with other pages),
+and report a verdict. Length alone never justifies a split. When the verdict is
+"mixed purpose," outline a proposed set of focused child topics and tag each
+later finding with the section it belongs to, so fixes travel with their
+content. A restructure changes URLs, so present it as a proposal for a human
+decision, not a fix.
 
 ## Step 2: Audience assessment
 
@@ -236,6 +258,13 @@ has no findings, say so explicitly; an absent section reads as "not checked."
 ## Audience
 (persona, use case, entry state, evidence, mismatch flag, what's missing)
 
+## Scope and structure
+(verdict: Right-sized | Long but cohesive | Mixed purpose, consider
+restructuring | Unclear; a section-by-section table of what each section acts
+as; the signals that fired. For "mixed purpose": proposed child topics with
+type, working title, which sections move, restructure cost, and what has to be
+handled when content moves. See references/topic-scope.md)
+
 ## Accuracy issues
 (table or list: doc claim | source reality | doc file:line and source file:line | proposed fix)
 
@@ -274,6 +303,25 @@ once the fixes are applied (for example merged in a PR), not before, the page's
 format. Beyla pages don't carry `review_date` today, so word it as "consider
 adding or updating `review_date`". This is a reminder for the person; the skill
 never edits it. Skip it when the report found nothing to fix.
+
+## Handoff: applying fixes after the report
+
+The report is the end of the analysis, not a request to edit. If the person
+then asks you to apply findings, read
+[references/handoff-editing.md](./references/handoff-editing.md) before you
+touch a file. The essentials:
+
+- Edit only after an explicit request, and only the pages the person names.
+- Use the editor's in-place edit tool so every change appears as a diff the
+  person can Keep or Undo. Never write files through the terminal or a script,
+  and never rewrite a whole existing file.
+- One finding per edit, accuracy first, then completeness, then style. Change
+  nothing the finding doesn't call for.
+- Never edit this skill's own files. Note skill improvements in chat instead.
+- Don't accept your own changes, don't stage or commit, and if you can't edit in
+  place, give the text in chat and stop.
+
+This applies for the rest of the conversation, including later turns.
 
 ## GenAI boundary
 

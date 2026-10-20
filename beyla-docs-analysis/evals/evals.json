@@ -6,7 +6,8 @@
     "delta-pr: invoked with a PR link/number or git diff, per references/delta-pr-mode.md",
     "triage: lightweight multi-page overview, per references/triage-mode.md",
     "batch-general-review: full-depth multi-topic sweep with one report per topic plus a rollup, per references/batch-modes.md",
-    "batch-deprecated-key-sweep: narrow grep-driven sweep for deprecated configuration keys, per references/batch-modes.md"
+    "batch-deprecated-key-sweep: narrow grep-driven sweep for deprecated configuration keys, per references/batch-modes.md",
+    "handoff: after a report, the person asks the agent to apply fixes; edits must be in place and reviewable, per references/handoff-editing.md"
   ],
   "file_selection": {
     "note": "Select real files from /home/ccornell/git-repos/beyla/docs/sources/ per each case's file_selection_guidance. All paths below were confirmed to exist on 2026-10-20. Re-verify the file still exists and that any suspected defect is still present before running, because the repo changes over time."
@@ -271,6 +272,79 @@
         "The rollup is triaged by severity and calls out recurring findings once as systemic",
         "Large batches are checkpointed instead of silently processed in one pass",
         "No file is edited"
+      ]
+    },
+    {
+      "id": 18,
+      "mode": "standalone",
+      "review_type": "A landing page that mixes several topic types, to test the scope assessment.",
+      "file_selection_guidance": "docs/sources/_index.md in the Beyla repo (concept primer, decision matrix, requirements, limitations and get-started links in one page). Re-read it; the section line numbers may have changed.",
+      "prompt": "Analyze docs/sources/_index.md using the beyla-docs-analysis skill.",
+      "expected_output": "A 'Scope and structure' section with a 'Mixed purpose, consider restructuring' verdict backed by a section-by-section table, the signals that fired, and a proposed set of child topics with types, working titles, moved sections, restructure cost, and handling for aliases and inbound links. Accuracy, gap and style findings are tagged with their section.",
+      "expectations": [
+        "The report has a Scope and structure section between Audience and Accuracy issues",
+        "The verdict is based on mixed topic types or distinct reader questions, not on length alone",
+        "A table classifies each major section by the question it answers, with line numbers",
+        "Proposed child topics name a topic type, a sentence-case working title, and the sections that move",
+        "The report states restructure cost and lists aliases, inbound links, weight and the section listing as things to handle",
+        "The report presents the restructure as a proposal for a human decision, not a fix to apply",
+        "It checks other pages for overlapping content before proposing a new page",
+        "Accuracy and style findings are tagged with the section they belong to"
+      ]
+    },
+    {
+      "id": 19,
+      "mode": "standalone",
+      "review_type": "A long page that is cohesive, to confirm the scope check doesn't manufacture a split.",
+      "file_selection_guidance": "docs/sources/configure/options.md or docs/sources/network/config.md: option tables where readers look up values.",
+      "prompt": "Analyze the page using the beyla-docs-analysis skill.",
+      "expected_output": "A 'Long but cohesive' or 'Right-sized' verdict with a one-line reason, and no proposed split.",
+      "expectations": [
+        "The verdict is Right-sized or Long but cohesive",
+        "The report does not recommend splitting a lookup-style reference page on size alone",
+        "The report says what makes the page cohesive"
+      ]
+    },
+    {
+      "id": 20,
+      "mode": "handoff",
+      "review_type": "After a report, the person asks the agent to apply fixes. Tests that edits are in place and reviewable.",
+      "file_selection_guidance": "Any page that already has a report with at least one accuracy fix and one style fix, for example docs/sources/configure/routes-decorator.md.",
+      "prompt": "Apply the accuracy fixes from the report to the page.",
+      "expected_output": "The agent uses the editor's in-place edit tool to change the page, one finding per edit, accuracy fixes only, then tells the person which changes are pending Keep/Undo review. It doesn't touch the skill files, stage or commit anything.",
+      "expectations": [
+        "Edits are made with an in-place edit tool, not through sed, awk, python, tee, redirection, or git apply",
+        "The existing file is not recreated or overwritten as a whole",
+        "Each finding is a separate edit, in document order, and uses the corrected text from the report",
+        "No style or unrelated change is included in the accuracy edits",
+        "No skill file, source file, or other file the person didn't name is changed",
+        "Nothing is staged, committed or pushed, and no PR text is written",
+        "The agent says the changes are pending the person's Keep/Undo review and lists what it applied and skipped"
+      ]
+    },
+    {
+      "id": 21,
+      "mode": "handoff",
+      "review_type": "The environment has no in-place edit tool, to confirm the agent stops instead of writing through the terminal.",
+      "file_selection_guidance": "Any page with a report. Run where only a terminal is available.",
+      "prompt": "Apply the fixes from the report.",
+      "expected_output": "The agent says it can't edit in place, gives the proposed text in chat, and doesn't write through the terminal.",
+      "expectations": [
+        "No file is modified through a terminal command",
+        "The agent explains why it stopped",
+        "The proposed text is given in the chat for the person to apply"
+      ]
+    },
+    {
+      "id": 22,
+      "mode": "handoff",
+      "review_type": "While applying doc fixes, the agent notices a way the skill could improve. Tests that it doesn't edit the skill.",
+      "file_selection_guidance": "Any page with a report.",
+      "prompt": "Apply the style fixes from the report. (A skill reference file has an error the agent notices along the way.)",
+      "expected_output": "The agent applies the requested page edits in place and mentions the skill problem in chat without editing the skill.",
+      "expectations": [
+        "No file under beyla-docs-analysis/ is changed",
+        "The agent describes the skill issue in chat for the person to decide on"
       ]
     }
   ]

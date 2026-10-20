@@ -31,6 +31,11 @@ came from, so whoever maintains it next knows what to re-sync.
 - The baseline run reported 1,452 findings across 47 pages.
 - `make vale` exits non-zero when findings exist.
 
+## Added after the first dry run (2026-10-20)
+
+- `topic-scope.md` is original to this skill. It is grounded in the Writers' Toolkit topic types (`writers-toolkit/docs/sources/structure/topic-types/`: one topic type per page, concept excludes steps and lookup tables, section pages are landing pages, and the guidance on when tasks may be combined). Its size calibration comes from a one-time measurement of the 47 Beyla pages and has not been tested against real runs, so treat the numbers as a starting point.
+- `handoff-editing.md` is original to this skill. It exists because the Keep/Undo review controls come from the host application, not the skill, and the rule has to continue after the analysis ends. It was not verified in every host or mode.
+
 ## Triage findings
 
 `reports/triage-overview.md` was produced on 2026-10-20 by parallel automated

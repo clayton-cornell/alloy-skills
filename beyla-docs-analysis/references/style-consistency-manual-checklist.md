@@ -19,6 +19,7 @@ Most of the Vale-covered rules are `suggestion` or `warning` level, and a `make 
 - **Ordinals** (`Ordinal.yml`): spell out "first" through "ninth"; numerals from 10th on. **"and/or"** (`AndOr.yml`): avoid it except where space is limited (for example, a table cell).
 - **Sentence and paragraph length.** The style conventions give explicit thresholds: sentences under 25 words and paragraphs of at most three sentences. No Vale rule covers them (`Paragraphs.yml` is about `<br>` elements, not length). Flag a sentence over 25 words or a paragraph over three sentences, and propose a split.
 - **Be positive.** Prefer positive phrasing ("Remember to..." over "Don't forget to..."). It's a judgment call: flag a passage conspicuously built around "don't" or "can't" when a positive rephrase is clearly available. Don't flag legitimate warnings.
+- **Don't start a sentence with "Because"** (including "Because of"). Lead with the main point and put the reason after it: "The eBPF probes don't add library code to your application, because the instrumentation runs outside the application process." Or state the consequence first and the reason in a following sentence. This is a house wording preference, and no Vale rule enforces it (the `Grafana` style package has no rule for it; the word only appears in the message text of `Simple.yml`). "Because" in the middle of a sentence is fine. Leave sentences inside quoted log output, code, and sample output as they are. Before you propose a rewrite, check that the main clause still stands on its own and the meaning doesn't change. Detection: run `python3 <skill>/scripts/check_source_format.py <page.md>`; it lists each sentence-initial "Because" with its line. The example sentence above is taken from the 2026-10-20 working tree (`_index.md`), which had 4 sentence-initial uses across the 47 pages.
 - **Lists aren't a substitute for paragraphs.** Flag list-ified prose.
 - **", for example,"** for examples, not "e.g." or a bare list.
 - **Admonitions sparingly.** Flag a page that leans on admonitions where plain prose would do.
@@ -32,6 +33,38 @@ Most of the Vale-covered rules are `suggestion` or `warning` level, and a `make 
 - **Unordered-list conventions.** Capitalize the first word of each item unless there's a strong reason not to (for example, a case-sensitive option name). If the items are complete sentences, every item in that list ends in a period, consistently. One item with a period means all need one.
 - **Bullet marker: dash (`-`), never asterisk (`*`).** No Vale rule checks the marker, since it renders identically, so it's only visible in the raw source. Observed in the baseline: lines beginning `* ` in `network/_index.md`, `network/config.md`, `security.md`, `cardinality.md`, and `obi.md`. Check the source before reporting, because some of these lines may not be list markers. Flag a page that mixes `-` and `*` as much as one using `*` throughout.
 - **Alphabetical order, unless order matters.** Independent named items (options, flags, metrics with no inherent sequence) should be alphabetical. A sequence of steps or a priority-ordered list is exempt. Check only where order clearly carries no meaning.
+
+## Source line breaks (semantic line breaks)
+
+**The rule.** Write one sentence per line in the Markdown source, and break lines only at sentence ends. Don't hard-wrap a paragraph at a column width, and don't join several sentences on one line. A long sentence stays on one line; if it's too long to read, the sentence-length rule is what splits it into two sentences, not a line break.
+
+**What this rests on.** It renders the same either way, because a single newline in Markdown is a space. The reasons are practical: a change to one sentence shows as a one-line diff, review comments and Vale findings point at a sentence, and a mid-sentence wrap can't hide a change. No Vale rule enforces it, and the Writers' Toolkit doesn't require it as a rule. Observed on 2026-10-20: the Alloy docs follow it almost everywhere (8 mid-sentence wraps and 29 multi-sentence lines across the 11 `collect/` pages), while the Beyla docs mostly don't (398 mid-sentence wraps and 379 multi-sentence lines across 47 pages). So this check is the only coverage.
+
+**Mechanics.**
+
+- **List items:** the first sentence stays on the item's line, and each further sentence goes on its own line, indented to align with the item text: three spaces under a numbered item, two under a bullet (the Writers' Toolkit Markdown guide describes this indentation).
+- **A sentence that ends in a colon** and introduces a code block or list is its own line.
+- **Never break** inside inline code, link text, a shortcode tag, or a table row. A table row, heading, reference definition, and shortcode tag are each one line.
+- **Abbreviations and numbers** that contain a period (`5.17`, `e.g.`) aren't sentence ends. Don't split there. "For example" is preferred over "e.g." anyway.
+- **No hard breaks.** Don't add trailing double spaces or a trailing backslash to force a break.
+- **Leave alone:** front matter, fenced code, tables, headings, and HTML comments.
+
+**Detection.** Run the checker and paste its output:
+
+```bash
+python3 <skill>/scripts/check_source_format.py <page.md> --lines
+```
+
+It reports two things per page: lines that hold more than one sentence (`multi_sentence_lines`), and lines that continue a sentence onto the next line (`wrapped_lines`). The sentence splitter is a heuristic, so the counts are approximate. Read each line before you report it, and drop false positives such as a line that ends in an abbreviation.
+
+**How to report.**
+
+- Give the page's two counts, out of its prose line count, and say whether the page is mostly compliant or mostly hard-wrapped.
+- Show one or two representative paragraphs as before and after. Don't list every line.
+- Say that converting the rest is mechanical and produces a large diff, so it's best done as its own pass after the accuracy and gap fixes (see `references/handoff-editing.md`).
+- A page that is compliant except for a few lines gets those lines listed with `file:line`.
+
+**Scope.** In delta mode, apply this only to added or changed lines. Re-wrapping untouched lines is out of scope for a PR; report the pre-existing count as a follow-up (`references/delta-pr-mode.md`).
 
 ## Link text quality
 

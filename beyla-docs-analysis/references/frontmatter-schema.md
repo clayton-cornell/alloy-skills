@@ -79,7 +79,7 @@ Explicit control over multi-destination links, paired with `ref` URIs in the bod
 
 ### `review_date`
 
-`YYYY-MM-DD`, the date the page was last reviewed. Rendered at the page foot. **Out of scope for `beyla-docs-analysis`.**
+`YYYY-MM-DD`, the date the page was last reviewed. Rendered at the page foot. The Writers' Toolkit examples quote the value (`review_date: "2024-09-03"`). **Checking it is out of scope for `beyla-docs-analysis`.** After the person's requested edits are applied, the agent suggests adding or updating it (see `references/handoff-editing.md`).
 
 ### `slug`
 

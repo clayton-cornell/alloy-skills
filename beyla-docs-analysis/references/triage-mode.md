@@ -3,7 +3,8 @@
 Use this mode when the user asks for an overview across many pages instead of a
 detailed report on one. It replaces the Step 4 report format in `SKILL.md` and
 keeps the same evidence rules: verify against the checked-out source, don't
-guess, and never edit files.
+guess, and never edit files. Triage is analysis only; if the person asks you to
+apply anything afterwards, follow `references/handoff-editing.md`.
 
 ## Depth
 
@@ -25,7 +26,12 @@ Return one row per page:
 | Verdict | `Accurate`, `Minor`, `Major`, or `Unverified` |
 | Deviations | Approximate count of confirmed doc-vs-source discrepancies |
 | Gaps | Approximate count of confirmed user-facing source behavior the page should cover but doesn't |
+| Scope | `OK`, `Long-ok` (long but one purpose), or `Split?` (mixed purpose; see `references/topic-scope.md`). For `Split?`, add a few words naming the jobs it mixes |
 | Notes | One line: the most important deviation or gap, with a `file:line` for the doc and source side |
+
+The Scope column is a quick read from section headings and size, not the full
+scope analysis. Use the signals in `references/topic-scope.md`, and don't mark a
+page `Split?` on length alone.
 
 Verdict rules:
 

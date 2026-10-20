@@ -57,6 +57,8 @@ The generic front matter for these templates adds `topicType` and `versionDate`.
 
 **Stability and preview language.** No Beyla page observed uses `docs/public-preview`, `docs/private-preview`, or `docs/experimental`. Don't flag their absence. If a page describes a feature as experimental or preview in plain prose, raise a low-confidence question about whether a shared convention applies. Don't invent a fix. Verify the stability claim itself against the source (SKILL accuracy step).
 
+**Link style and line breaks.** Prefer reference-style links, with the definitions inside the block when the link is inside an admonition, and write one sentence per line in the source. Both are house preferences that no Vale rule enforces. Beyla pages mostly don't follow them today (401 inline links, no reference-style links, about 380 multi-sentence lines, and about 400 lines wrapped mid-sentence, with some overlap, across 47 pages on 2026-10-20). Rules and detection: `references/style-consistency-links-shortcodes.md` and `references/style-consistency-manual-checklist.md`.
+
 **Admonitions.** Both `{{< admonition >}}` and `{{% admonition %}}` appear in the docs. The generic guide uses the `{{< >}}` form. See `references/style-consistency-links-shortcodes.md`.
 
 **Cross-product wording.** Beyla docs refer to Grafana Alloy and Grafana Cloud. Use the naming rules in `references/style-consistency-terminology.md`.

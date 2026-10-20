@@ -65,6 +65,12 @@ reorders table rows, rewraps a paragraph, or restyles a link touches lines
 without changing what they say. Treating them as "in the diff" and correcting
 their content is out-of-scope editing in disguise.
 
+- **Link and line-break conventions are checked on changed text only.** The
+  reference-style link preference, the rule that an admonition holds its own
+  link definitions, and one sentence per line apply to lines the PR added or
+  changed. Don't flag or count pre-existing inline links or hard-wrapped
+  paragraphs on untouched lines. Report their page-level counts once, as a
+  follow-up, from `scripts/check_source_format.py`.
 - A pre-existing problem on a reformatted line is **reported as a follow-up**,
   never counted as an in-diff finding.
 - When a PR fixes one instance of a problem and leaves an identical sibling

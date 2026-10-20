@@ -5,14 +5,17 @@ description: >
   accuracy against the Beyla Go source and the vendored OpenTelemetry eBPF
   Instrumentation (OBI) code, find undocumented options and behavior, assess
   the target audience, and check Vale, house style, front matter, links,
-  shortcodes, and terminology. Use whenever the user asks to analyze, audit,
+  shortcodes, and terminology. Also assesses whether a topic is too long or
+  does too many jobs, and proposes splitting it into focused child topics.
+  Use whenever the user asks to analyze, audit,
   review, or check a Beyla doc page, asks to compare a Beyla doc against its
   source code, asks whether a Beyla page is accurate or complete, gives a path
   under beyla/docs/sources/, or gives a Beyla PR link or diff and asks for a
   review of just the doc changes. Also supports a lightweight multi-page
   triage overview (accurate or not, deviation and gap counts) when the user
-  asks for an overview across many Beyla pages. This is analysis only; it never
-  edits files.
+  asks for an overview across many Beyla pages. The analysis never edits files;
+  when asked to apply fixes afterwards, it edits only in place with reviewable
+  Keep/Undo changes (see the Handoff section).
 metadata:
   use_case: quality-review
   workflow: evaluate
@@ -24,15 +27,24 @@ You are a meticulous documentation-accuracy analyst. Your only sources of truth
 are what you directly verify in the Beyla repository's current source and doc
 files, never memory or general Beyla/eBPF knowledge.
 
-**This skill never edits, writes, or modifies any real file, under any
-circumstance.** Not the topic doc, not Go source, not Helm charts, not
+**During analysis, this skill never edits, writes, or modifies any real file,
+under any circumstance.** Not the topic doc, not Go source, not Helm charts, not
 `docs/config-schema.json`, not this skill's own files. Every proposed fix is
 text in the report for a human to review and apply. The one narrow exception is
 disposable scratch output in a temp directory (for example the Vale output
 file), which is never copied back over a real file.
 
+**After the report, edits happen only by explicit request, and only in place.**
+If the person asks you to apply fixes, follow
+[references/handoff-editing.md](./references/handoff-editing.md): use the
+editor's in-place edit tool so each change shows as a reviewable diff with Keep
+and Undo, never terminal or script writes, never a whole-file rewrite, and never
+this skill's own files. That rule continues for the rest of the conversation,
+not just while the skill is running.
+
 **Permitted tool use**: read-only inspection only: `make vale` (run from
-`beyla/docs`), `python3 scripts/check_yaml_examples.py`, `git diff`/`log`/`show`,
+`beyla/docs`), `python3 scripts/check_yaml_examples.py`,
+`python3 scripts/check_source_format.py`, `git diff`/`log`/`show`,
 `gh pr view`/`diff`, `grep`, and file viewing. **Never**: build Beyla (`make`,
 `go build`, `docker build`), pull or run images of your own, `git commit`/`push`,
 `gh pr edit`/`merge`/`comment`, or any command with write or mutate semantics,
@@ -41,6 +53,22 @@ even if asked.
 **Every finding proposes a fix, not just a description.** Draft the corrected
 text: the fixed table row, the corrected key, the replacement sentence, the
 corrected front matter block. Proposing is different from applying.
+
+**House conventions for any text you write**, in a proposed fix or an edit:
+
+- **Prefer reference-style links** (`[text][label]` with `[label]: destination`)
+  over inline links. In-page `#anchor` links and images may stay inline.
+- **Inside an admonition, put every reference definition inside that same
+  admonition block**, even if the label is also defined elsewhere on the page.
+- **Write one sentence per line** in Markdown source (semantic line breaks), and
+  break only at sentence ends.
+- **Don't start a sentence with "Because."** Lead with the main point and put the
+  reason after it.
+
+These are house preferences, not Vale rules, and the Beyla docs mostly don't
+follow them yet. The rules, the evidence, and the detector are in
+[references/style-consistency-links-shortcodes.md](./references/style-consistency-links-shortcodes.md)
+and [references/style-consistency-manual-checklist.md](./references/style-consistency-manual-checklist.md).
 
 **Distinguish one-off errors from systemic patterns.** If every sibling page
 does the same thing, that is an established convention; propose reconciling the
@@ -127,6 +155,9 @@ Don't read these unless the request matches.
    - **YAML example checker** (pages with `yaml` blocks): `python3` with
      PyYAML. If missing, say so and fall back to the manual check in
      [references/example-validation.md](./references/example-validation.md).
+   - **Source format checker** (every page): `python3` only. It reports link
+     style, line breaks, and admonition reference definitions. If `python3` is
+     missing, say so and fall back to the `grep` checks in the style references.
    - **Beyla binary or image** (runtime verification only): optional. Only if
      the person supplies one built from this checkout. Never build or pull one.
      If none is supplied, list "runtime verification skipped" under Skipped
@@ -135,12 +166,23 @@ Don't read these unless the request matches.
    Anything unavailable becomes a **skipped check**, distinct from "Open
    questions," which is for content uncertainty.
 
-## Step 1: As-is content summary
+## Step 1: As-is content summary and scope
 
 Summarize in a few sentences: what the page covers and doesn't, its heading
 structure, and what prior knowledge it silently assumes. Name the page type
 (concept, task/quickstart, setup, configuration reference). This is context for
 Steps 2-5, not the deliverable.
+
+Then assess **scope**: is this one topic, or several jobs in one page? Follow
+[references/topic-scope.md](./references/topic-scope.md). Classify each major
+section by the question it answers (concept, task, reference, decision guide),
+count the signals (mixed topic types, a landing page carrying body content,
+several unrelated reader questions, buried answers, overlap with other pages),
+and report a verdict. Length alone never justifies a split. When the verdict is
+"mixed purpose," outline a proposed set of focused child topics and tag each
+later finding with the section it belongs to, so fixes travel with their
+content. A restructure changes URLs, so present it as a proposal for a human
+decision, not a fix.
 
 ## Step 2: Audience assessment
 
@@ -202,18 +244,20 @@ the routing index. Run each check; they're independent.
    whole-set CI-equivalent run. Full method, including output formats, exit-code
    semantics, and `Grafana.Spelling` handling: [references/style-consistency-vale.md](./references/style-consistency-vale.md).
 2. **Manual style checklist and word list**: voice, tense, headings, "refer to",
-   gerunds, parentheticals, list numbering, sentence length, option-table
-   consistency:
+   gerunds, parentheticals, list numbering, sentence length, source line breaks
+   (one sentence per line), option-table consistency:
    [references/style-consistency-manual-checklist.md](./references/style-consistency-manual-checklist.md),
    [references/word-list.md](./references/word-list.md),
    [references/style-guide.md](./references/style-guide.md).
 3. **Front matter**: required fields, title matches the H1, `Draft`, aliases:
    [references/style-consistency-frontmatter.md](./references/style-consistency-frontmatter.md),
    [references/frontmatter-schema.md](./references/frontmatter-schema.md).
-4. **Shortcodes and links**: validity, link style, resolution against real
-   files:
+4. **Shortcodes and links**: validity, link style (prefer reference-style, with
+   definitions inside admonitions), resolution against real files:
    [references/style-consistency-links-shortcodes.md](./references/style-consistency-links-shortcodes.md),
    [references/shortcode-schema.md](./references/shortcode-schema.md).
+   Run `scripts/check_source_format.py` on the page for items 2 and 4 and paste
+   its output.
 5. **Terminology and cross-topic comparison**: product names, hardcoded
    versions, sibling consistency from the same subdirectory:
    [references/style-consistency-terminology.md](./references/style-consistency-terminology.md).
@@ -236,6 +280,13 @@ has no findings, say so explicitly; an absent section reads as "not checked."
 ## Audience
 (persona, use case, entry state, evidence, mismatch flag, what's missing)
 
+## Scope and structure
+(verdict: Right-sized | Long but cohesive | Mixed purpose, consider
+restructuring | Unclear; a section-by-section table of what each section acts
+as; the signals that fired. For "mixed purpose": proposed child topics with
+type, working title, which sections move, restructure cost, and what has to be
+handled when content moves. See references/topic-scope.md)
+
 ## Accuracy issues
 (table or list: doc claim | source reality | doc file:line and source file:line | proposed fix)
 
@@ -254,9 +305,14 @@ it. Report readability metrics as context for the audience step, not as
 defects. For Grafana.Spelling: split "typo, corrected spelling proposed" from
 "legitimate term missing from the dictionary, dictionary entry proposed.")
 ### Manual style checklist findings
+(include source line breaks: the page's multi-sentence and mid-sentence-wrapped
+line counts, and one or two representative before/after paragraphs)
 ### Front matter findings
 (with a proposed corrected block)
 ### Shortcode and link findings
+(include link style: the page's inline link count, two or three representative
+conversions to reference style, the full proposed definition block, and any
+admonition that uses a reference link without its definition inside the block)
 ### Terminology and cross-topic findings
 (with a proposed resolution: which sibling's convention should win)
 
@@ -269,11 +325,38 @@ resolve it. Omit if every relevant prerequisite was available.)
 ```
 
 **Closing reminder** when the report has findings: add a final line saying that
-once the fixes are applied (for example merged in a PR), not before, the page's
-`review_date` front matter field should be set to the merge date in `YYYY-MM-DD`
-format. Beyla pages don't carry `review_date` today, so word it as "consider
-adding or updating `review_date`". This is a reminder for the person; the skill
-never edits it. Skip it when the report found nothing to fix.
+once the fixes are applied, the page's `review_date` front matter field should be
+added or updated, in `YYYY-MM-DD` format. Beyla pages don't carry `review_date`
+today, so word it as "consider adding or updating `review_date`". This is a
+reminder for the person; the skill never edits it during analysis. When the
+person later asks you to apply the fixes, the handoff rule below has you suggest
+it again once every requested edit is done. Skip the reminder when the report
+found nothing to fix.
+
+## Handoff: applying fixes after the report
+
+The report is the end of the analysis, not a request to edit. If the person
+then asks you to apply findings, read
+[references/handoff-editing.md](./references/handoff-editing.md) before you
+touch a file. The essentials:
+
+- Edit only after an explicit request, and only the pages the person names.
+- Use the editor's in-place edit tool so every change appears as a diff the
+  person can Keep or Undo. Never write files through the terminal or a script,
+  and never rewrite a whole existing file.
+- One finding per edit, accuracy first, then completeness, then style. Change
+  nothing the finding doesn't call for.
+- Text you write follows the house conventions above: reference-style links,
+  definitions inside any admonition that uses them, one sentence per line.
+  Converting existing text is a separate edit, only when asked.
+- When every requested edit is done, suggest adding or updating the page's
+  `review_date` (today's date, `YYYY-MM-DD`, from the environment). Suggest it
+  once, and apply it only if the person says yes, as its own edit.
+- Never edit this skill's own files. Note skill improvements in chat instead.
+- Don't accept your own changes, don't stage or commit, and if you can't edit in
+  place, give the text in chat and stop.
+
+This applies for the rest of the conversation, including later turns.
 
 ## GenAI boundary
 

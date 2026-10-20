@@ -159,6 +159,21 @@ Not defects. Functionality that exists in code and was left out of the docs at t
 - **Backports:** was [#7119] backported (Item 6)? Is the [#7309] removal backported (Item 5)?
 - **Tracking issues:** does an issue or fix PR already exist for Items 1, 2, 3, 4, 8 and 12, and for L1 to L3?
 - **Doc edits to commit:** the `pyroscope.scrape.md` and `prometheus.echo.md` edits on `docs/correct-minor-errors-component-docs` were uncommitted when written. Commit them and open a PR.
+- **`list(string)` Default cells, blank vs `[]`:** no convention. Reviewed peers genuinely split — `cadvisor` uses `` `[]` `` on four arguments and `gcp` uses it on `extra_filters`, while `gcp`'s `metrics_prefixes` and `azure`'s `included_dimensions` are optional and left blank. Raised on `prometheus.exporter.redis` 2026-10-19, which has seven blank `list(string)` cells; left as-is deliberately rather than asserting a convention from mixed evidence. Decide the rule once, then apply it going forward rather than sweeping existing pages. Same shape as the boolean `Whether to…` question, where a full count showed 33/76 rather than the near-unanimity a small sample suggested.
+- **Block argument tables missing a lead-in sentence (part-03 backlog):** the convention is `You can use the following arguments with the `X` block:` immediately above each block's argument table. It was settled after part-03 merged, so 15 block tables across 6 merged files predate it. Audited 2026-10-19; counts are verified block argument tables only, with Exported fields and Debug metrics tables (which use their own different lead-ins) and `pyroscope.ebpf`'s five metrics tables excluded as false positives.
+
+  | File | Missing | Sections |
+  | --- | --- | --- |
+  | `remote.vault.md` | 10 | `auth.approle`, `auth.aws`, `auth.azure`, `auth.custom`, `auth.gcp`, `auth.kubernetes`, `auth.ldap`, `auth.token`, `auth.userpass`, `client_options` |
+  | `remote.s3.md` | 1 | `client` |
+  | `remote.kubernetes.configmap.md` | 1 | `client` |
+  | `remote.kubernetes.secret.md` | 1 | `client` |
+  | `remote.http.md` | 1 | `tls_config` |
+  | `pyroscope.scrape.md` | 1 | `clustering` |
+
+  Don't sweep these — fix each file when a PR already touches it. No `prometheus.exporter.*` page is affected; every reviewed exporter page already has its lead-ins.
+- **`uint32` fields documented as `int`:** `prometheus.exporter.snmp`'s `max_repetitions` is `uint32` in Go (`internal/component/prometheus/exporter/snmp/snmp.go:114`) but the reference doc types it `int`. Raised 2026-10-19 and deliberately left alone: no page was found documenting a `uint32` field any differently, so there's no evidence Alloy's documented type vocabulary distinguishes unsigned widths, and `int` may be correct. Needs a developer to confirm whether the docs should expose unsigned types at all. If the answer is no, this is a non-issue and should be closed rather than carried.
+- **`snmp_exporter` walk params Alloy doesn't expose:** upstream `WalkParams` also carries `AllowNonIncreasingOIDs` (`snmp_exporter@v0.29.0/config/config.go:113`), which has no Alloy argument. Recorded in the "Possible fix" of code-issues Issue 12 rather than as its own entry, because it's a missing feature, not a defect. Worth deciding alongside the `use_unconnected_udp_socket` fix, since both live in the same override block.
 
 ---
 

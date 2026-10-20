@@ -15,7 +15,32 @@ This skill's analysis phase is read-only. After the report, the person often ask
 2. **Never change a file through the terminal or a script.** That means no `sed`, `awk`, `perl -i`, `python` or `node` that writes, `tee`, `>` or `>>` redirection, heredocs, `git apply`, `patch`, or running a formatter or linter in write or fix mode (for example `vale` with a fix option, or a Markdown formatter with `--write`). These bypass the review controls. Read-only commands are fine.
 3. **Keep edits small and separate.** One finding per edit where you can, in document order, using the corrected text from the report. Don't mix unrelated findings in one change. Apply in this order so the person can keep one group and undo another: accuracy fixes, then completeness additions, then style fixes. Never put a style change in the same change as an accuracy fix.
 4. **Change only what the finding says.** Don't reflow paragraphs, re-wrap lines, fix whitespace, rename headings, or "improve" nearby text. Unrelated changes make the diff harder to review.
+   - **One exception: text you write.** Any sentence or link you add or replace follows the house conventions (next section), even if the paragraph around it doesn't.
+   - **Converting existing text** to those conventions (turning inline links into reference-style links, re-breaking hard-wrapped paragraphs) is its own finding and its own edit. Do it only when the person asks, and say first that it produces a large diff. Offer to do it as a separate pass after the accuracy and gap fixes. Make it one edit per paragraph or per admonition block, so the person can Keep or Undo each one.
 5. **Don't accept your own changes.** The person decides with Keep or Undo. Don't describe the edits as final. If the person undoes one, don't re-apply it.
+
+## Conventions for text you write
+
+These apply to every sentence you add or replace, in an edit or in the report's proposed text. Full rules are in `references/style-consistency-links-shortcodes.md` and `references/style-consistency-manual-checklist.md`.
+
+- **Reference-style links.** Write `[text][label]` and define `[label]: destination`. Leave in-page `#anchor` links and images inline. Put the definition block at the end of the page, in order of first use.
+- **Inside an admonition, the definitions go inside the block.** A reference link in a `{{< admonition >}}` gets its definition in the same block, after its content and a blank line, even if the label is defined elsewhere on the page. That is a separate hunk from the page-level definitions, so keep it with the text that uses it. If you reuse an existing page-level label in new page text, don't add a duplicate. Page text must never rely on a definition that exists only inside an admonition.
+- **One sentence per line.** Break only at sentence ends. Don't wrap at a column width, and don't put two sentences on a line. In a list item, put further sentences on their own lines, indented to the item text.
+- **Adding a link needs two edits:** the sentence, and the definition (inside the admonition block or at the end of the page). Make both, and say which is which, so the person can Keep or Undo them together.
+- **Match the page when it differs.** If the page's own links or wrapping are inline or hard-wrapped, still write your new text to the conventions, and mention in the summary that the rest of the page isn't converted.
+
+## Finish with a review_date suggestion
+
+When you've applied **all** the edits the person asked for, and at least one edit to a page is still standing, end your summary with a one-line suggestion to add or update that page's `review_date`:
+
+- The value is today's date as `YYYY-MM-DD` in quotes, like the Writers' Toolkit examples: `review_date: "2026-10-20"`. Take the date from the environment (the current date shown to you). If you can't tell today's date, ask; don't guess.
+- Say whether the page already has a `review_date` (suggest updating it) or doesn't (suggest adding it). Beyla pages don't carry one today.
+- Suggest once, after the last requested edit, not after each edit. If you edited several pages, list them in one suggestion.
+- Don't suggest it if the person undid every edit to a page, or if you applied nothing.
+- **Don't add it unprompted.** If the person says yes, apply it as its own in-place edit of just that front matter line, separate from the content edits, so they can Keep or Undo it. Add it as the last front matter key unless sibling pages order their keys differently.
+- If the changes merge on a later day, the person may want the merge date instead. Mention that in one short clause, not a paragraph.
+
+This is a suggestion for the person to accept, not a step you perform.
 
 ## What not to edit
 
@@ -29,7 +54,8 @@ Tell the person, briefly:
 
 - which findings you applied, by report number or heading, and which you skipped and why;
 - that the changes are pending their review, with Keep or Undo on each;
-- anything you couldn't change safely (for example a fix that needs a restructure, or text that changed since the report).
+- anything you couldn't change safely (for example a fix that needs a restructure, or text that changed since the report);
+- when every requested edit is done, the `review_date` suggestion (see "Finish with a review_date suggestion").
 
 ## If you can't edit in place
 

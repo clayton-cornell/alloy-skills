@@ -4,7 +4,7 @@
 
 Validate the page's front matter against `references/frontmatter-schema.md` (the Grafana-wide spec) **and** against what Beyla pages actually do. Every finding proposes the literal corrected front matter, not just "fix the title."
 
-**Out of scope: `review_date`.** The field is valid, but this skill doesn't check whether a page has one or how old it is. A repo-wide absence isn't this page's finding. If a report must mention it, point to the separate documentation-freshness check. Absence of `labels` or `review_date` is **not** a finding (see `references/dont-flag.md`).
+**Out of scope as a finding: `review_date`.** The field is valid, but this skill doesn't report whether a page has one or how old it is. A repo-wide absence isn't this page's finding. If a report must mention it, point to the separate documentation-freshness check. Absence of `labels` or `review_date` is **not** a finding (see `references/dont-flag.md`). This is separate from the closing suggestion: after the person's requested edits are applied, the agent suggests adding or updating `review_date` (see `references/handoff-editing.md`).
 
 ## Beyla baseline (all 47 pages, 2026-10-20)
 

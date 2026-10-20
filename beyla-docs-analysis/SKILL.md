@@ -43,7 +43,8 @@ this skill's own files. That rule continues for the rest of the conversation,
 not just while the skill is running.
 
 **Permitted tool use**: read-only inspection only: `make vale` (run from
-`beyla/docs`), `python3 scripts/check_yaml_examples.py`, `git diff`/`log`/`show`,
+`beyla/docs`), `python3 scripts/check_yaml_examples.py`,
+`python3 scripts/check_source_format.py`, `git diff`/`log`/`show`,
 `gh pr view`/`diff`, `grep`, and file viewing. **Never**: build Beyla (`make`,
 `go build`, `docker build`), pull or run images of your own, `git commit`/`push`,
 `gh pr edit`/`merge`/`comment`, or any command with write or mutate semantics,
@@ -52,6 +53,20 @@ even if asked.
 **Every finding proposes a fix, not just a description.** Draft the corrected
 text: the fixed table row, the corrected key, the replacement sentence, the
 corrected front matter block. Proposing is different from applying.
+
+**House conventions for any text you write**, in a proposed fix or an edit:
+
+- **Prefer reference-style links** (`[text][label]` with `[label]: destination`)
+  over inline links. In-page `#anchor` links and images may stay inline.
+- **Inside an admonition, put every reference definition inside that same
+  admonition block**, even if the label is also defined elsewhere on the page.
+- **Write one sentence per line** in Markdown source (semantic line breaks), and
+  break only at sentence ends.
+
+These are house preferences, not Vale rules, and the Beyla docs mostly don't
+follow them yet. The rules, the evidence, and the detector are in
+[references/style-consistency-links-shortcodes.md](./references/style-consistency-links-shortcodes.md)
+and [references/style-consistency-manual-checklist.md](./references/style-consistency-manual-checklist.md).
 
 **Distinguish one-off errors from systemic patterns.** If every sibling page
 does the same thing, that is an established convention; propose reconciling the
@@ -138,6 +153,9 @@ Don't read these unless the request matches.
    - **YAML example checker** (pages with `yaml` blocks): `python3` with
      PyYAML. If missing, say so and fall back to the manual check in
      [references/example-validation.md](./references/example-validation.md).
+   - **Source format checker** (every page): `python3` only. It reports link
+     style, line breaks, and admonition reference definitions. If `python3` is
+     missing, say so and fall back to the `grep` checks in the style references.
    - **Beyla binary or image** (runtime verification only): optional. Only if
      the person supplies one built from this checkout. Never build or pull one.
      If none is supplied, list "runtime verification skipped" under Skipped
@@ -224,18 +242,20 @@ the routing index. Run each check; they're independent.
    whole-set CI-equivalent run. Full method, including output formats, exit-code
    semantics, and `Grafana.Spelling` handling: [references/style-consistency-vale.md](./references/style-consistency-vale.md).
 2. **Manual style checklist and word list**: voice, tense, headings, "refer to",
-   gerunds, parentheticals, list numbering, sentence length, option-table
-   consistency:
+   gerunds, parentheticals, list numbering, sentence length, source line breaks
+   (one sentence per line), option-table consistency:
    [references/style-consistency-manual-checklist.md](./references/style-consistency-manual-checklist.md),
    [references/word-list.md](./references/word-list.md),
    [references/style-guide.md](./references/style-guide.md).
 3. **Front matter**: required fields, title matches the H1, `Draft`, aliases:
    [references/style-consistency-frontmatter.md](./references/style-consistency-frontmatter.md),
    [references/frontmatter-schema.md](./references/frontmatter-schema.md).
-4. **Shortcodes and links**: validity, link style, resolution against real
-   files:
+4. **Shortcodes and links**: validity, link style (prefer reference-style, with
+   definitions inside admonitions), resolution against real files:
    [references/style-consistency-links-shortcodes.md](./references/style-consistency-links-shortcodes.md),
    [references/shortcode-schema.md](./references/shortcode-schema.md).
+   Run `scripts/check_source_format.py` on the page for items 2 and 4 and paste
+   its output.
 5. **Terminology and cross-topic comparison**: product names, hardcoded
    versions, sibling consistency from the same subdirectory:
    [references/style-consistency-terminology.md](./references/style-consistency-terminology.md).
@@ -283,9 +303,14 @@ it. Report readability metrics as context for the audience step, not as
 defects. For Grafana.Spelling: split "typo, corrected spelling proposed" from
 "legitimate term missing from the dictionary, dictionary entry proposed.")
 ### Manual style checklist findings
+(include source line breaks: the page's multi-sentence and mid-sentence-wrapped
+line counts, and one or two representative before/after paragraphs)
 ### Front matter findings
 (with a proposed corrected block)
 ### Shortcode and link findings
+(include link style: the page's inline link count, two or three representative
+conversions to reference style, the full proposed definition block, and any
+admonition that uses a reference link without its definition inside the block)
 ### Terminology and cross-topic findings
 (with a proposed resolution: which sibling's convention should win)
 
@@ -298,11 +323,13 @@ resolve it. Omit if every relevant prerequisite was available.)
 ```
 
 **Closing reminder** when the report has findings: add a final line saying that
-once the fixes are applied (for example merged in a PR), not before, the page's
-`review_date` front matter field should be set to the merge date in `YYYY-MM-DD`
-format. Beyla pages don't carry `review_date` today, so word it as "consider
-adding or updating `review_date`". This is a reminder for the person; the skill
-never edits it. Skip it when the report found nothing to fix.
+once the fixes are applied, the page's `review_date` front matter field should be
+added or updated, in `YYYY-MM-DD` format. Beyla pages don't carry `review_date`
+today, so word it as "consider adding or updating `review_date`". This is a
+reminder for the person; the skill never edits it during analysis. When the
+person later asks you to apply the fixes, the handoff rule below has you suggest
+it again once every requested edit is done. Skip the reminder when the report
+found nothing to fix.
 
 ## Handoff: applying fixes after the report
 
@@ -317,6 +344,12 @@ touch a file. The essentials:
   and never rewrite a whole existing file.
 - One finding per edit, accuracy first, then completeness, then style. Change
   nothing the finding doesn't call for.
+- Text you write follows the house conventions above: reference-style links,
+  definitions inside any admonition that uses them, one sentence per line.
+  Converting existing text is a separate edit, only when asked.
+- When every requested edit is done, suggest adding or updating the page's
+  `review_date` (today's date, `YYYY-MM-DD`, from the environment). Suggest it
+  once, and apply it only if the person says yes, as its own edit.
 - Never edit this skill's own files. Note skill improvements in chat instead.
 - Don't accept your own changes, don't stage or commit, and if you can't edit in
   place, give the text in chat and stop.

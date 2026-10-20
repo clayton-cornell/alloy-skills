@@ -346,6 +346,81 @@
         "No file under beyla-docs-analysis/ is changed",
         "The agent describes the skill issue in chat for the person to decide on"
       ]
+    },
+    {
+      "id": 23,
+      "mode": "standalone",
+      "review_type": "A page with only inline links and hard-wrapped paragraphs, to test the link-style and line-break findings.",
+      "file_selection_guidance": "docs/sources/network/inter-az.md (hard-wrapped sentences, one inline link) or docs/sources/configure/export-data.md (32 inline links). Re-run scripts/check_source_format.py to confirm the counts before using.",
+      "prompt": "Analyze the page using the beyla-docs-analysis skill.",
+      "expected_output": "Findings under Manual style checklist and Shortcode and link findings that give the checker's counts, a couple of before/after examples, and the proposed definition block, without pasting hundreds of rewrites.",
+      "expectations": [
+        "The report runs scripts/check_source_format.py and pastes its output",
+        "It reports the inline link count and proposes reference-style links as a style preference, not an error",
+        "It proposes a full definition block with lowercase hyphenated labels in order of first use",
+        "It leaves in-page #anchor links and images inline and says so",
+        "It reports multi-sentence lines and mid-sentence wraps with counts and one or two before/after paragraphs",
+        "It says converting the rest is mechanical and large, and suggests a separate pass",
+        "It doesn't claim the Writers' Toolkit or Vale requires either convention"
+      ]
+    },
+    {
+      "id": 24,
+      "mode": "standalone",
+      "review_type": "A page with an admonition that uses a reference-style link, to test the in-block definition rule.",
+      "file_selection_guidance": "Any page with a {{< admonition >}} block, for example docs/sources/network/inter-az.md. Use a scratch copy only if you need a page with a reference link whose definition is at the end of the page (don't edit the real file).",
+      "prompt": "Analyze the page using the beyla-docs-analysis skill. (The admonition uses [text][label] with its definition only at the end of the page.)",
+      "expected_output": "An admonition reference finding with the exact corrected block, defining the label inside the admonition after its content and a blank line.",
+      "expectations": [
+        "The checker's admonition reference problem is reported as its own finding",
+        "The proposed block puts the definition inside the same admonition, even though the label is also defined at the page end",
+        "The report says duplicate definitions across blocks are intended",
+        "Any proposed new link inside an admonition has its definition inside that admonition"
+      ]
+    },
+    {
+      "id": 25,
+      "mode": "handoff",
+      "review_type": "The person asks the agent to add a sentence with a link to an admonition and a paragraph.",
+      "file_selection_guidance": "Any page with a report and an admonition.",
+      "prompt": "Apply the completeness fix from the report that adds a sentence with a link inside the note.",
+      "expected_output": "Two in-place edits: the sentence (reference-style, one sentence per line) and its definition inside the same admonition. No page-wide conversion.",
+      "expectations": [
+        "The new link is reference-style, and its definition is inside the admonition block",
+        "The new sentence is on its own line, with no hard wrap",
+        "The rest of the page's links and wrapping are not converted",
+        "The summary mentions that the rest of the page isn't converted",
+        "Edits are made with an in-place edit tool"
+      ]
+    },
+    {
+      "id": 26,
+      "mode": "handoff",
+      "review_type": "After the last requested edit, the agent suggests a review_date.",
+      "file_selection_guidance": "Any page where at least one edit is applied. The page has no review_date.",
+      "prompt": "Apply all the fixes from the report to the page.",
+      "expected_output": "After the last edit, the summary ends with a one-line suggestion to add review_date with today's date, and the agent doesn't add it until told to.",
+      "expectations": [
+        "The review_date suggestion appears once, after the last requested edit, not after each edit",
+        "The suggested value is today's date as a quoted YYYY-MM-DD, taken from the environment, not guessed",
+        "The agent says the page has no review_date today (or that it would update an existing one)",
+        "The agent does not edit the front matter until the person agrees",
+        "If the person agrees, the front matter edit is separate from the content edits",
+        "No suggestion is made for a page where every edit was undone or nothing was applied"
+      ]
+    },
+    {
+      "id": 27,
+      "mode": "delta-pr",
+      "review_type": "A PR that rewraps or restyles links on lines it doesn't otherwise change.",
+      "file_selection_guidance": "A Beyla PR or diff that adds one new paragraph and also reflows nearby text. Use a local diff if no real PR exists.",
+      "prompt": "Review the doc changes in this diff using the beyla-docs-analysis skill.",
+      "expected_output": "Link-style and line-break findings only for added or changed text, with the pre-existing page counts reported once as a follow-up.",
+      "expectations": [
+        "Inline links and hard-wrapped lines outside the diff are not counted as in-diff findings",
+        "The pre-existing counts from the checker are reported once as a follow-up",
+        "New text in the diff is checked against the reference-link and one-sentence-per-line conventions"
+      ]
     }
   ]
 }

@@ -20,7 +20,8 @@ Don't re-flag the suppressed rule inside the suppressed range. **Do** flag a sup
 
 ## Out of scope fields
 
-- **A missing `review_date`.** Out of scope for this skill, and so is a stale one. Absence of `labels` on a page is expected too, because `labels.products` is inherited from the root `cascade`.
+- **A missing `review_date`.** Not a finding, and neither is a stale one. The closing suggestion to add or update it after the person's edits is a separate step (`references/handoff-editing.md`). Absence of `labels` on a page is expected too, because `labels.products` is inherited from the root `cascade`.
+- **Existing inline links and hard-wrapped lines on lines a PR didn't change.** The reference-style link and one-sentence-per-line preferences apply to added or changed text. Report the pre-existing count once as a follow-up (`references/delta-pr-mode.md`).
 
 ## Content the linter already ignores
 

@@ -1,0 +1,277 @@
+{
+  "_source": "Structure and eval-writing pattern adapted from alloy-docs-analysis/evals/evals.json (itself adapted from docs-ai/skills/docs-review/evals/evals.json). All test cases below are original to beyla-docs-analysis. Cases that name a specific suspected defect rely on the 2026-10-20 triage (reports/triage-overview.md), which was not independently verified: treat those as 'observed in the triage', re-confirm against the current checkout before running, and score the case on whether the skill reports what it can actually confirm.",
+  "skill_name": "beyla-docs-analysis",
+  "usage_modes": [
+    "standalone: invoked directly on one Beyla documentation topic at a time",
+    "delta-pr: invoked with a PR link/number or git diff, per references/delta-pr-mode.md",
+    "triage: lightweight multi-page overview, per references/triage-mode.md",
+    "batch-general-review: full-depth multi-topic sweep with one report per topic plus a rollup, per references/batch-modes.md",
+    "batch-deprecated-key-sweep: narrow grep-driven sweep for deprecated configuration keys, per references/batch-modes.md"
+  ],
+  "file_selection": {
+    "note": "Select real files from /home/ccornell/git-repos/beyla/docs/sources/ per each case's file_selection_guidance. All paths below were confirmed to exist on 2026-10-20. Re-verify the file still exists and that any suspected defect is still present before running, because the repo changes over time."
+  },
+  "evals": [
+    {
+      "id": 1,
+      "mode": "standalone",
+      "review_type": "A configure/ reference page expected to be mostly accurate, to confirm the skill doesn't manufacture findings and doesn't flag a missing beginner on-ramp on an Expert-leaning reference page.",
+      "file_selection_guidance": "Use docs/sources/configure/example.md or docs/sources/configure/sample-traces.md. The 2026-10-20 triage observed both as Accurate (sample-traces.md with about two gaps around a silent fallback on a bad sampler config). Confirm against the current checkout.",
+      "prompt": "Analyze docs/sources/configure/sample-traces.md using the beyla-docs-analysis skill.",
+      "expected_output": "The report verifies the page's checkable claims (sampler names, arguments, defaults) against pkg/beyla/config.go and the vendored OBI source. Any section with no findings says so explicitly. Audience, if assessed, infers an Expert-leaning persona and does not ask for a beginner introduction.",
+      "expectations": [
+        "Report includes Summary, Accuracy issues, Completeness gaps, and Open questions sections, with empty sections stating that none were found",
+        "No accuracy issue is reported without both a documentation line and a source file:line citation",
+        "Any completeness gap names the source location and a suggested place in the page",
+        "The report does not flag the absence of a beginner-level introduction as a finding for this configure/ page",
+        "If a persona is stated, it is Expert or Expert/Operator with textual evidence, not only a readability score",
+        "A search hit alone is not used as evidence: cited source files were opened and the surrounding code verified"
+      ]
+    },
+    {
+      "id": 2,
+      "mode": "standalone",
+      "review_type": "A configure/ page with a suspected wrong default, to confirm the skill traces the effective default through parsing and normalization rather than trusting a struct tag.",
+      "file_selection_guidance": "Use docs/sources/configure/routes-decorator.md. The 2026-10-20 triage observed that the documented default for routes.unmatched doesn't match the source default (low-cardinality at pkg/beyla/config.go, around line 83) and that routes has no environment variables. Confirm both before running.",
+      "prompt": "Analyze docs/sources/configure/routes-decorator.md using the beyla-docs-analysis skill.",
+      "expected_output": "Accuracy issues reports the documented `unmatched` default, cites the doc line, and cites the source file:line that establishes the effective default. The finding is in Accuracy issues, not Open questions, and includes proposed corrected wording.",
+      "expectations": [
+        "The `unmatched` default mismatch is reported in Accuracy issues with both a doc line and a source file:line",
+        "The cited source is the default-assigning code (for example the default config in pkg/beyla/config.go), not only a struct declaration",
+        "The report doesn't soften a confirmed discrepancy into a hedge when the source clearly contradicts the doc",
+        "If the page marks routes-related environment variables, the report checks whether they exist in source and reports the result either way",
+        "If the source no longer disagrees with the doc, the report says the default was confirmed accurate instead of repeating the triage claim"
+      ]
+    },
+    {
+      "id": 3,
+      "mode": "standalone",
+      "review_type": "A language quickstart with stale printer output, to confirm the skill compares sample output in examples against current source behavior and treats the quickstart as a Learner/Practitioner on-ramp.",
+      "file_selection_guidance": "Use docs/sources/quickstart/golang.md. The 2026-10-20 triage observed that the trace-printer sample output (BEYLA_TRACE_PRINTER=text) no longer matches the current printer format and that the page makes a `/**` claim for routes. Confirm against the trace printer source before running.",
+      "prompt": "Analyze docs/sources/quickstart/golang.md using the beyla-docs-analysis skill.",
+      "expected_output": "The report compares the sample trace output in the page with the format produced by the printer code and reports differences with both sides cited. It also checks the routes `unmatched` claim against source. Audience, if assessed, treats the page as a Learner/Practitioner on-ramp.",
+      "expectations": [
+        "The sample output block is checked against the printer source and any difference is reported as an accuracy issue with doc line and source file:line",
+        "The report says exactly which fields or format details differ instead of only saying the output is 'stale'",
+        "If the output can't be confirmed because Beyla can't be run, the report says so under Open questions or Skipped checks, and does not invent the current output",
+        "Audience, if present, names Learner or Practitioner and checks for undefined jargon, framing, and next steps, not Expert-only red flags",
+        "Report does not edit the page"
+      ]
+    },
+    {
+      "id": 4,
+      "mode": "standalone",
+      "review_type": "A network observability page with attribute names that may not exist, to confirm the skill checks attribute and metric names against source and understands that the non-strict YAML loader silently ignores wrong keys.",
+      "file_selection_guidance": "Use docs/sources/network/inter-az.md. The 2026-10-20 triage observed nonexistent k8s.src.pod.name style attribute names (silently ignored), a wrong defaults claim, and use of the deprecated otel_metrics_export.features location. Confirm against the network metric attribute definitions in source before running.",
+      "prompt": "Analyze docs/sources/network/inter-az.md using the beyla-docs-analysis skill.",
+      "expected_output": "Accuracy issues names each documented attribute that doesn't exist in the attribute definitions, citing the allowed attribute list in source. The report notes that an unknown key doesn't produce an error, so a user would silently get different behavior. Deprecated configuration use is reported with its replacement.",
+      "expectations": [
+        "Each nonexistent attribute name is reported with the doc line and the source file:line of the attribute definitions that contradict it",
+        "The report explains the user-visible consequence (silently ignored or different behavior) only if the loader behavior was verified in source",
+        "Attribute names that do exist are not falsely flagged",
+        "Use of a deprecated configuration location is reported with the replacement and a source citation, or listed in Open questions if the source can't confirm it",
+        "Findings are in Accuracy issues, not buried in Open questions, when the source clearly contradicts the page"
+      ]
+    },
+    {
+      "id": 5,
+      "mode": "standalone",
+      "review_type": "A setup page where chart defaults and binary defaults differ, to confirm the skill distinguishes the Helm chart's values from Beyla's built-in defaults and uses the charts/ directory as the source of truth for chart claims.",
+      "file_selection_guidance": "Use docs/sources/setup/kubernetes-helm.md against charts/ (values.yaml and templates) and pkg/beyla/config.go. The 2026-10-20 triage observed that chart defaults match the page, with a typo and several undocumented values (preset, privileged, k8sCache). Confirm before running.",
+      "prompt": "Analyze docs/sources/setup/kubernetes-helm.md using the beyla-docs-analysis skill.",
+      "expected_output": "Chart claims (value names, defaults, resources) are verified against the chart's values.yaml and templates, not against the binary's config defaults. Where the chart overrides or sets a value the binary also defaults, the report states which one the page documents. Completeness gaps for undocumented chart values are reported only if they are confirmed in the chart.",
+      "expectations": [
+        "Chart value claims cite files under charts/ as the source, not only pkg/beyla/config.go",
+        "The report explicitly distinguishes a chart default from the binary's built-in default where both exist",
+        "Undocumented chart values are reported as completeness gaps only when the report cites the chart file and line, and names where the page should cover them",
+        "Chart values that are internal or marked undocumented are not reported as gaps",
+        "Sections are all present, with empty sections stating that none were found"
+      ]
+    },
+    {
+      "id": 6,
+      "mode": "standalone",
+      "review_type": "A page that documents a third-party chart living outside the Beyla repo, to confirm the skill reports Unverified/Open questions instead of verifying against the wrong source or inventing findings.",
+      "file_selection_guidance": "Use docs/sources/setup/helm-alloy.md. The 2026-10-20 triage marked this page Unverified because the Alloy Helm chart and the beyla.ebpf Alloy component live outside this repository.",
+      "prompt": "Analyze docs/sources/setup/helm-alloy.md using the beyla-docs-analysis skill.",
+      "expected_output": "The report states that the Alloy chart and the Alloy component are outside the Beyla checkout, lists the claims that therefore can't be checked, and names the missing source needed to verify them. Claims that are about Beyla itself (for example any Beyla config keys in the examples) may still be checked.",
+      "expectations": [
+        "The report states that claims about the Alloy Helm chart or Alloy component can't be verified against the available source",
+        "Those claims appear under Open questions, naming the missing source (for example the Alloy repository or chart), not as accuracy findings",
+        "No finding is based on memory or an upstream branch of the other project",
+        "Any Beyla-owned claims on the page (keys, env vars, metric names) are still verified, or the report says why not",
+        "In triage mode this page would get the Unverified verdict (explained in the Notes column)"
+      ]
+    },
+    {
+      "id": 7,
+      "mode": "standalone",
+      "review_type": "A concept/landing page with platform-requirement claims, to confirm the skill checks kernel-version and Go-version statements against source behavior and doesn't treat marketing prose as verifiable.",
+      "file_selection_guidance": "Use docs/sources/_index.md. The 2026-10-20 triage observed an overstated 'runs in any Linux environment' claim vs. the kernel/BTF startup check, an overstated kernel 5.17 bpf_loop requirement (older kernels fall back to legacy programs), and an unsupported claim about supported Go versions. Confirm each in source before reporting.",
+      "prompt": "Analyze docs/sources/_index.md using the beyla-docs-analysis skill.",
+      "expected_output": "Accuracy checks target the checkable claims (kernel 5.8/BTF requirement, kernel 5.17 for header-based context propagation, supported Go versions and languages, supported protocols). Each confirmed discrepancy cites the doc line and the source that establishes the behavior (kernel check code, bpf_loop fallback). Pure narrative prose is skipped, not reported.",
+      "expectations": [
+        "Kernel and Go version claims are each checked against specific source (startup checks, build-tag or fallback logic, go.mod or supported-version tables) with file:line citations",
+        "A claim that can't be checked in the checkout is placed in Open questions with the missing evidence named",
+        "Marketing or explanatory prose with no checkable claim is not turned into findings",
+        "Audience, if assessed, treats this top-level page as an on-ramp and checks for Learner red flags (undefined jargon, no next steps)",
+        "The report distinguishes accuracy issues (wrong statements) from completeness gaps (undocumented override or option)"
+      ]
+    },
+    {
+      "id": 8,
+      "mode": "standalone",
+      "review_type": "A page whose YAML example has a syntax error, to confirm the skill runs the YAML example validation (scripts/check_yaml_examples.py / references/example-validation.md) and distinguishes a syntax error from a wrong key.",
+      "file_selection_guidance": "Use docs/sources/configure/export-data.md. The 2026-10-20 triage observed a YAML syntax error in one example, a questionable BEYLA_OTEL_METRICS_FEATURES mapping, and application_span_otel missing from one list. Run the example check first to locate the error and confirm it before running.",
+      "prompt": "Analyze docs/sources/configure/export-data.md using the beyla-docs-analysis skill, including the YAML example validation.",
+      "expected_output": "The example validation identifies the block that fails to parse, cites its doc line, and explains the error. The report separates parse failures from semantically wrong keys, since the loader ignores unknown keys silently. Environment-variable mappings are checked against the env tags in config source.",
+      "expectations": [
+        "The YAML example that fails to parse is reported as an accuracy issue with the doc line and the parser's error or an equivalent explanation",
+        "A syntax error is reported separately from keys that parse but don't exist in source",
+        "Examples that parse correctly are not flagged for syntax",
+        "The report doesn't say an example 'works' on the strength of parsing alone, and notes that parsing doesn't validate keys against Beyla's config",
+        "If the validation script couldn't run (for example, no Python or YAML library), this is listed under Skipped checks rather than silently omitted"
+      ]
+    },
+    {
+      "id": 9,
+      "mode": "standalone",
+      "review_type": "A page that contains Vale suppression comments, to confirm the skill handles them without treating them as content or as bypassing the style pass.",
+      "file_selection_guidance": "Use docs/sources/cardinality.md, which contains `<!-- vale Grafana.OK = NO -->` and `<!-- vale Grafana.OK = YES -->` comments (confirmed at lines 89 and 201 on 2026-10-20). The 2026-10-20 triage also observed a wrong messaging metric name (messaging.publish.duration vs messaging.client.operation.duration) and an off-by-one body-size bucket count.",
+      "prompt": "Analyze docs/sources/cardinality.md using the beyla-docs-analysis skill, including the style pass.",
+      "expected_output": "The style pass notes the suppressed region and doesn't report Vale findings that fall inside it as new problems. It treats suppression comments as an intentional author choice, and mentions them as a note, not as a defect. The accuracy pass checks the metric names and bucket counts against source. Audience treats the page as Expert/Operator content.",
+      "expectations": [
+        "Vale findings inside the suppressed region are not reported as style defects, and the report notes that the region is suppressed",
+        "The report doesn't flag the suppression comments themselves as errors",
+        "Metric names on the page are checked against the metric definitions in source, with file:line citations for any mismatch",
+        "Audience names Expert or Operator, not Learner",
+        "A high readability grade level alone is not reported as a finding for this page"
+      ]
+    },
+    {
+      "id": 10,
+      "mode": "standalone",
+      "review_type": "Environment without podman or Docker, to confirm the skill degrades honestly on the Vale step instead of fabricating scores or findings.",
+      "file_selection_guidance": "Any page, for example docs/sources/configure/service-discovery.md. Run where podman and Docker are confirmed unavailable, or state their unavailability in the prompt.",
+      "prompt": "Analyze docs/sources/configure/service-discovery.md using the beyla-docs-analysis skill, including the style and audience passes. Note: neither podman nor Docker is available in this environment, so `make vale` can't run.",
+      "expected_output": "The report lists Vale and the readability metrics under Skipped checks with the reason, and gives no numeric readability scores. The audience inference proceeds from textual evidence only. The accuracy and completeness passes complete normally.",
+      "expectations": [
+        "A 'Skipped checks' section lists the Vale/readability check and says podman or Docker was unavailable",
+        "The report contains no readability score, Vale rule name, or style finding presented as if it came from Vale",
+        "Audience inference is still given, based on textual evidence, and says it has no readability metrics",
+        "Accuracy issues and Completeness gaps are not affected and complete normally",
+        "The skipped Vale check is not reported as an Open question about the page's content, since it's an environment limitation"
+      ]
+    },
+    {
+      "id": 11,
+      "mode": "standalone",
+      "review_type": "Environment with no built Beyla binary, to confirm runtime verification is skipped honestly while static source verification continues.",
+      "file_selection_guidance": "Use docs/sources/quickstart/python.md (or any quickstart that shows CLI output or runtime behavior). Run where no beyla binary is on PATH and none has been built, or state it in the prompt.",
+      "prompt": "Analyze docs/sources/quickstart/python.md using the beyla-docs-analysis skill. No Beyla binary is available here and none can be built.",
+      "expected_output": "Static checks (keys, defaults, env vars) run against source. Claims that need a running Beyla, such as printed output, startup logs, or startup-time errors, are listed under Skipped checks with the reason. The report doesn't claim runtime behavior from memory.",
+      "expectations": [
+        "Runtime verification is listed under Skipped checks with the reason that no Beyla binary is available",
+        "Claims about printed output or log messages are verified statically against the printing or logging source where possible, and the report says the check was static, not run",
+        "No claim is described as 'verified by running Beyla'",
+        "Static accuracy checks of keys, env vars, and defaults still run normally",
+        "Skipped runtime checks are not reported as accuracy issues"
+      ]
+    },
+    {
+      "id": 12,
+      "mode": "standalone",
+      "review_type": "A page whose claims concern behavior implemented in the OBI dependency, where the checkout has a vendored OBI copy but the `.obi-src` submodule referenced by go.mod's replace directive is not checked out, to confirm the skill raises an open question instead of a finding or a silent substitution.",
+      "file_selection_guidance": "Use docs/sources/obi.md or docs/sources/configure/export-data.md. The 2026-10-20 triage observed that obi.md mentions `application_jvm`, which isn't in the vendored OBI source, and that `.obi-src` wasn't checked out. Check whether go.mod still has the replace directive and whether `.obi-src` exists before running.",
+      "prompt": "Analyze docs/sources/obi.md using the beyla-docs-analysis skill. The .obi-src submodule is not checked out; only vendor/go.opentelemetry.io/obi/ is present.",
+      "expected_output": "The report states which OBI source it used (the vendored copy) and notes the difference from the submodule version go.mod points to. A claim that appears absent from the vendored copy but might exist in the submodule version is listed as an open question with the evidence needed to resolve it. It is not reported as a confirmed inaccuracy.",
+      "expectations": [
+        "The report names the OBI source actually used (vendor/go.opentelemetry.io/obi/) and says the .obi-src submodule wasn't available",
+        "A vendored-vs-submodule mismatch is reported under Open questions, not as an accuracy issue",
+        "The Open question names the evidence that would resolve it (for example, checking out the pinned submodule revision)",
+        "The report does not substitute a newer upstream OBI version from memory or from the network",
+        "Claims that are confirmed in the vendored source are still verified and reported with file:line citations"
+      ]
+    },
+    {
+      "id": 13,
+      "mode": "delta-pr",
+      "review_type": "A PR or diff that changes only part of a docs page, to confirm the skill reads the full page but scopes output to the changed lines, lists pre-existing findings separately with a count, and never posts to GitHub.",
+      "file_selection_guidance": "Use any recent open or merged grafana/beyla PR that changes docs/sources/**, found with `gh pr list --repo grafana/beyla --search 'docs' --state all`. Alternatively use a local diff such as `git diff HEAD~5..HEAD -- docs/sources` on the checkout. Prefer a PR that also changes code, to exercise head-source verification. Use only read-only commands.",
+      "prompt": "Using the beyla-docs-analysis skill in delta mode, review just the docs changes in grafana/beyla PR <number>. Produce a local report only.",
+      "expected_output": "The report states its scope (PR number, files, changed line ranges, head SHA) and tags each finding as in or out of the diff. Only in-diff findings are detailed. Pre-existing findings outside the diff are given as a count. Claims in the diff are checked against the PR's head source when the PR changes code, and against the current checkout otherwise. Nothing is posted to GitHub.",
+      "expectations": [
+        "The Summary states the scope explicitly, including the PR or diff and the number of additional pre-existing findings outside the diff",
+        "The full current page was read, even though findings are scoped to changed lines",
+        "Only read-only commands were used (gh pr view, gh pr diff, git diff, git show); the working tree was not changed",
+        "If the PR changes code, source claims are verified against the PR's head (cited with the SHA); otherwise against the current checkout, and the report says which",
+        "A moved or reformatted line with a pre-existing error is reported as a follow-up, not as an in-diff finding",
+        "The report doesn't post to GitHub, draft review comments or PR description text for pasting, or edit any file"
+      ]
+    },
+    {
+      "id": 14,
+      "mode": "triage",
+      "review_type": "A multi-page overview of the whole docs tree, to confirm the skill produces the table format from references/triage-mode.md and the topic-level gap pass instead of 47 detailed reports.",
+      "file_selection_guidance": "All pages under /home/ccornell/git-repos/beyla/docs/sources/ (47 Markdown pages as of 2026-10-20, found with `find docs/sources -name '*.md'`). Compare against reports/triage-overview.md only for sanity checks; that report was not independently verified.",
+      "prompt": "Using the beyla-docs-analysis skill in triage mode, give me an overview of the accuracy and gaps across all the Beyla docs.",
+      "expected_output": "One row per page with Page, Verdict (Accurate, Minor, Major, or Unverified), Deviations, Gaps, and Notes columns. Counts use `~` where not fully enumerated. Notes for non-clean pages cite a file:line on both the doc and source side. A topic-level gap pass follows the table, listing source behavior covered by no page, thinly covered features, and a 'Not counted' list for experimental or undocumented behavior. The report states the gap pass is a keyword-coverage survey.",
+      "expectations": [
+        "The table has one row per page and covers every page found by the file listing (47 as of 2026-10-20), with no page silently skipped",
+        "Each verdict is one of Accurate, Minor, Major, or Unverified, and the verdict rules from triage-mode.md are applied (a wrong key, env var, or behavior-changing default is Major)",
+        "Notes for non-Accurate pages cite doc and source file:line; Accurate pages don't have padded Notes",
+        "Counts count confirmed findings only, and unconfirmed items go in a short 'Open' note",
+        "A topic-level gap pass is present, covers top-level config sections, env-var groups, and charts/binaries, and says it is a keyword-coverage survey, not a page review",
+        "Behavior the source marks experimental or undocumented (for example the OpenTelemetry SDK injector) is listed under 'Not counted', not reported as a gap",
+        "Cross-cutting issues that recur across pages are called out once, not repeated per page",
+        "The report does not edit any file"
+      ]
+    },
+    {
+      "id": 15,
+      "mode": "standalone",
+      "review_type": "A guardrail case where the user asks the skill to fix the page, to confirm the skill doesn't edit files and offers its findings as a report only.",
+      "file_selection_guidance": "Use docs/sources/configure/routes-decorator.md or any other page with a confirmed finding. Record the file's checksum before and after (for example `git status --short docs/sources` or `sha256sum`) to check nothing changed.",
+      "prompt": "Analyze docs/sources/configure/routes-decorator.md with the beyla-docs-analysis skill and fix any problems you find directly in the file.",
+      "expected_output": "The report is produced as normal. The skill states that it reports findings and proposed wording but doesn't edit documentation files, and that applying the changes is a separate step. The file is unchanged.",
+      "expectations": [
+        "The page file is unchanged after the run (no edits, no new files in docs/sources/)",
+        "The reply explicitly says the skill doesn't edit files and that fixes are proposed in the report",
+        "The report still includes proposed corrected wording for confirmed accuracy issues",
+        "No git commands that modify state (add, commit, checkout, stash, push) were run",
+        "The analysis is not abandoned or shortened because of the edit request"
+      ]
+    },
+    {
+      "id": 16,
+      "mode": "batch-deprecated-key-sweep",
+      "review_type": "The narrow deprecated-key sweep across docs/sources/, to confirm the skill classifies each grep hit instead of reporting every match, and doesn't flag text that documents a deprecation.",
+      "file_selection_guidance": "All of /home/ccornell/git-repos/beyla/docs/sources/. Likely true positives from the 2026-10-20 triage include setup/kubernetes-helm-appolly.md, setup/kubernetes-helm-k8s-monitoring.md, and network/inter-az.md. configure/export-data.md documents the application_span deprecation and should not be reported as a deprecated usage. setup/docker.md contains an unrelated Docker Compose `services:` key.",
+      "prompt": "Using the beyla-docs-analysis skill's deprecated-key sweep, find every page in docs/sources/ that still uses `otel_metrics_export.features`, `discovery.services`, `application_span`, or `executable_name` in an example or instruction.",
+      "expected_output": "One consolidated table with page, line, deprecated usage, replacement, and source confirmation. Each grep hit is classified as a deprecated usage, text documenting the deprecation, or an unrelated match, and only the first kind appears in the table. Rows without source confirmation go to Open questions.",
+      "expectations": [
+        "The recipe in references/batch-modes.md is used and its scope (all of docs/sources/) is stated",
+        "A Docker Compose `services:` key is classified as unrelated and does not appear in the table",
+        "Text that says a key is deprecated (for example in configure/export-data.md) is not reported as a deprecated usage",
+        "Each reported usage has a page, a line number, a replacement, and a source file:line confirming the deprecation",
+        "Only one consolidated table is produced, not a per-page report"
+      ]
+    },
+    {
+      "id": 17,
+      "mode": "batch-general-review",
+      "review_type": "An explicit request for a full-depth review of several pages, to confirm the skill confirms scope, runs the full procedure per page, writes one report per topic, and ends with a rollup.",
+      "file_selection_guidance": "Use the pages under docs/sources/quickstart/ (9 pages as of 2026-10-20, including _index.md) or a sample of three configure/ pages. Confirm the scope with the requester before starting.",
+      "prompt": "Do a full review of all the Beyla quickstart pages using the beyla-docs-analysis skill, one report per page and a rollup at the end.",
+      "expected_output": "The skill states the cost up front, confirms the scope (or proposes a bounded one), then runs the full procedure per page. Each page gets its own report in the standard format. A rollup lists the most significant findings per page, calls out systemic issues once (for example the same default or sample output across all language quickstarts), and points to each report.",
+      "expectations": [
+        "The skill states the cost of a full-depth batch and confirms or proposes a bounded scope before starting",
+        "Files were enumerated from the directory tree, not from an index page",
+        "Each page has its own report in the standard output format; findings from different pages are not merged into one report",
+        "The rollup is triaged by severity and calls out recurring findings once as systemic",
+        "Large batches are checkpointed instead of silently processed in one pass",
+        "No file is edited"
+      ]
+    }
+  ]
+}

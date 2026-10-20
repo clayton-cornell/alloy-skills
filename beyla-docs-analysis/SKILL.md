@@ -62,6 +62,8 @@ corrected front matter block. Proposing is different from applying.
   admonition block**, even if the label is also defined elsewhere on the page.
 - **Write one sentence per line** in Markdown source (semantic line breaks), and
   break only at sentence ends.
+- **Don't start a sentence with "Because."** Lead with the main point and put the
+  reason after it.
 
 These are house preferences, not Vale rules, and the Beyla docs mostly don't
 follow them yet. The rules, the evidence, and the detector are in

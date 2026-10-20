@@ -421,6 +421,21 @@
         "The pre-existing counts from the checker are reported once as a follow-up",
         "New text in the diff is checked against the reference-link and one-sentence-per-line conventions"
       ]
+    },
+    {
+      "id": 28,
+      "mode": "standalone",
+      "review_type": "A page with sentences that start with 'Because', to test the wording check.",
+      "file_selection_guidance": "docs/sources/distributed-traces.md or docs/sources/configure/language-agents.md. Re-run scripts/check_source_format.py to confirm the lines before using.",
+      "prompt": "Analyze the page using the beyla-docs-analysis skill.",
+      "expected_output": "A manual style finding that lists each sentence-initial 'Because' with its line and a rewrite that puts the main point first, without changing the meaning.",
+      "expectations": [
+        "The report runs scripts/check_source_format.py and cites its because-start lines",
+        "Each rewrite leads with the main clause and puts the reason after it",
+        "The report doesn't flag 'because' in the middle of a sentence",
+        "The report says no Vale rule enforces this and doesn't present it as an error",
+        "Quoted log output and code are left alone"
+      ]
     }
   ]
 }

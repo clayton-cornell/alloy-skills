@@ -10,6 +10,8 @@ Checks two house conventions:
 Usage:
   check_source_format.py FILE.md [FILE.md ...] [--json] [--lines] [--links]
 
+A fourth check reports sentences that start with "Because" (house wording rule).
+
 A third check covers reference links and admonitions: a reference-style link used
 inside an admonition block must have its definition inside that same block.
 
@@ -33,6 +35,7 @@ ADM_OPEN = re.compile(r"\{\{[<%]\s*admonition\b")
 ADM_CLOSE = re.compile(r"\{\{[<%]\s*/admonition\b")
 LIST_START = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 LIST_PREFIX = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
+SENT_BECAUSE = re.compile(r"""(?:^|[.!?]["')\]*_]*\s+)["'(\[*_`]*Because\b""")
 BOUNDARY = re.compile(r"""([.!?])(["')\]*_]*)\s+(?=["'(\[*_`]*[A-Z0-9])""")
 
 
@@ -66,7 +69,7 @@ def analyze(path):
     with open(path, encoding="utf-8") as f:
         lines = f.read().split("\n")
     out = {"file": path, "inline_links": [], "ref_defs": 0, "ref_uses": 0,
-           "multi_sentence_lines": [], "wrapped_lines": [], "prose_lines": 0, "images_inline": 0}
+           "multi_sentence_lines": [], "wrapped_lines": [], "because_starts": [], "prose_lines": 0, "images_inline": 0}
     i = 0
     if lines and lines[0].strip() == "---":
         i = 1
@@ -122,6 +125,8 @@ def analyze(path):
                 and not REF_DEF.match(nxt) and not re.search(r"[.!?:]$", stripped.rstrip("*_`\")]'\" ")) \
                 and not stripped.endswith(("|", "-->")):
             out["wrapped_lines"].append({"line": n + 1, "text": stripped[:140]})
+        if SENT_BECAUSE.search(mask(LIST_PREFIX.sub("", line))):
+            out["because_starts"].append({"line": n + 1, "text": stripped[:140]})
         k = sentence_count(line)
         if k > 1:
             out["multi_sentence_lines"].append({"line": n + 1, "sentences": k, "text": stripped[:140]})
@@ -161,7 +166,7 @@ def main():
         except OSError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-    findings = sum(len(r["inline_links"]) + len(r["multi_sentence_lines"]) + len(r["wrapped_lines"]) + len(r["admonition_ref_problems"]) for r in results)
+    findings = sum(len(r["inline_links"]) + len(r["multi_sentence_lines"]) + len(r["wrapped_lines"]) + len(r["admonition_ref_problems"]) + len(r["because_starts"]) for r in results)
     if args.json:
         json.dump({"results": results, "findings": findings}, sys.stdout, indent=2)
         print()
@@ -170,12 +175,15 @@ def main():
             print(f"{r['file']}: inline_links={len(r['inline_links'])} ref_uses={r['ref_uses']} "
                   f"ref_defs={r['ref_defs']} multi_sentence_lines={len(r['multi_sentence_lines'])} "
                   f"wrapped_lines={len(r['wrapped_lines'])} "
-                  f"admonition_ref_problems={len(r['admonition_ref_problems'])}"
+                  f"admonition_ref_problems={len(r['admonition_ref_problems'])} "
+                  f"because_starts={len(r['because_starts'])}"
                   f"/{r['prose_lines']} prose lines")
             if args.links:
                 for l in r["inline_links"]:
                     tag = " [in admonition]" if l["in_admonition"] else ""
                     print(f"  link {r['file']}:{l['line']}: [{l['text']}]({l['dest']}){tag}")
+            for l in r["because_starts"]:
+                print(f"  because {r['file']}:{l['line']}: sentence starts with 'Because': {l['text']}")
             for l in r["admonition_ref_problems"]:
                 print(f"  admonition {r['file']}:{l['line']}: {l['message']}")
             if args.lines:
@@ -187,8 +195,10 @@ def main():
         tot_s = sum(len(r["multi_sentence_lines"]) for r in results)
         tot_w = sum(len(r["wrapped_lines"]) for r in results)
         tot_a = sum(len(r["admonition_ref_problems"]) for r in results)
+        tot_b = sum(len(r["because_starts"]) for r in results)
         print(f"summary: {len(results)} files, {tot_l} inline links, {tot_s} multi-sentence lines, "
-              f"{tot_w} lines wrapped mid-sentence, {tot_a} admonition reference problems")
+              f"{tot_w} lines wrapped mid-sentence, {tot_a} admonition reference problems, "
+              f"{tot_b} sentences starting with Because")
     return 1 if findings else 0
 
 

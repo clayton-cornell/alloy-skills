@@ -423,6 +423,9 @@ six sub-files, one per check group below:
    check: Arguments/Blocks tables follow one exact, rigid column shape
    every time, and a confirmed row-order convention (required rows first,
    each group alphabetized), not a loose "prefer tables" suggestion.
+   The same file also holds the Usage section format check (required-only,
+   one block, with one documented exception) and the deprecated-argument
+   check (table-cell format plus page-wide consistency).
    **Check row order on every Arguments/Blocks table, every run — don't
    skip it because the table "looks fine" at a glance.** Confirmed real
    miss: an earlier pass over `pyroscope.ebpf.md` documented this rule but

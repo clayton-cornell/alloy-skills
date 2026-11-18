@@ -301,7 +301,7 @@ them:**
 5. **This skill never builds, installs, or upgrades the `alloy` binary
    itself.** Check whether it's already available (e.g. `alloy` on `PATH`,
    or a known local build output like `./build/alloy`) — ideally as part of
-   Step 0's upfront prerequisite check (SKILL.md item 9), not discovered
+   Step 0's upfront prerequisite check (SKILL.md item 6), not discovered
    here partway through Step 3.
    - **Missing**: ask the person directly whether they want to build it
      first (`make alloy` from the repo root) or proceed without this

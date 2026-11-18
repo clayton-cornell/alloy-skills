@@ -1,17 +1,17 @@
 ---
 name: alloy-docs-analysis
 description: >
-  Analyze a single Grafana Alloy documentation topic in depth: assess its target
-  audience, verify technical accuracy against Go source code (component
-  Arguments structs or CLI flag registrations, depending on page type), find
-  undocumented attributes/blocks/flags, and check style/consistency against the
-  Grafana Writers' Toolkit and sibling topics. Use whenever the user asks to
-  analyze, audit, review, or check an Alloy doc page, component reference page,
-  or CLI reference page; asks to compare an Alloy doc against its source code;
-  asks about a topic's readability or audience level; gives a path to a file
-  under alloy/docs/sources/; or gives a PR link/number/diff and asks for a
-  review of just the doc changes in it. This is analysis, not copyediting or
-  AI-content detection (see the separate docs-review skill for that).
+  Use when the user asks to analyze, audit, review, or check an Alloy doc
+  page, component reference page, or CLI reference page; asks to compare an
+  Alloy doc against its source code; asks about a topic's readability or
+  audience level; gives a path to a file under alloy/docs/sources/; or gives
+  a PR link, number, or diff and asks for a review of just the doc changes
+  in it. Analyzes one Alloy documentation topic in depth: assesses its
+  target audience, verifies technical accuracy against Go source code
+  (component Arguments structs or CLI flag registrations, depending on page
+  type), finds undocumented attributes/blocks/flags, and checks style and
+  consistency against the Grafana Writers' Toolkit and sibling topics. This
+  is analysis, not copyediting or AI-content detection.
 metadata:
   use_case: quality-review
   workflow: evaluate
@@ -86,23 +86,15 @@ This applies everywhere in the skill, not just to accuracy claims:
   explicitly rather than reporting it with the same confidence as something
   you verified directly against source.
 - A confident-sounding report built on a guess is worse than an honest "I
-  couldn't verify this" — every existing "Open questions"/"don't fabricate"
-  instance throughout this skill's reference files (the wrapped-upstream
-  cases in `accuracy-checklist-cli.md`/`accuracy-checklist-components.md`,
-  the ambiguous-scope case in `completeness-checklist-other.md`'s
-  self-referential check, and others) is a specific application of this
-  same general principle, not a one-off exception.
-- **A grep/search hit is not itself a confirmed citation.** Confirmed real
-  failure: a run cited a specific file:line from a grep match without
-  independently opening that file, reported it as a confirmed finding, and
-  the cited file turned out not to exist in the repo at all — a fabricated
-  citation. Before writing any file:line into a report, actually open the
-  file and confirm both that it exists and that the surrounding context
-  matches what the search snippet implied. A search result whose cited path
-  doesn't resolve isn't a lower-confidence version of the finding — it's no
-  evidence at all, and the claim belongs in "Open questions," not a
-  downgraded "Accuracy issue." See `accuracy-checklist-other.md`'s log-message
-  method for the specific incident this came from.
+  couldn't verify this."
+- **A grep/search hit is not itself a confirmed citation.** Before writing
+  any file:line into a report, actually open the file and confirm both that
+  it exists and that the surrounding context matches what the search snippet
+  implied. A search result whose cited path doesn't resolve isn't a
+  lower-confidence version of the finding — it's no evidence at all, and the
+  claim belongs in "Open questions," not a downgraded "Accuracy issue." (The
+  incident behind this rule is recorded in `references/PROVENANCE.md` and
+  `accuracy-checklist-other.md`'s log-message method.)
 
 **Read only the file(s) matching the current topic's category per Step 0's
 routing below — don't read every split reference file "just in case," that
@@ -112,7 +104,8 @@ regardless of page type, since those genuinely apply to every page equally;
 only the page-type-specific portions (Steps 0/3/4) benefit from the split.
 
 **Done when**: every top-level report section listed in the Output format
-below is present (with an explicit "no findings" statement where empty),
+below is present (with an explicit "no findings" statement where empty,
+except Source defects and Skipped checks, which are omitted when empty),
 every accuracy/completeness finding has a proposed fix, every skipped check
 names its blocking prerequisite, and no claim in the report is unverified
 without being flagged in "Open questions."
@@ -133,52 +126,47 @@ without waiting for the final report.
    If they only name a component, find the file yourself — don't ask them to look
    it up.
 2. Read the full topic file.
-3. If it's a `reference/components/*` page, identify the corresponding Go source
-   package. See `references/source-mapping-components.md` for how component doc
-   names map to source paths — this mapping is the backbone of Steps 3 and 4.
-4. If it's a `reference/cli/*` page, identify the corresponding
-   `internal/alloycli/cmd_<name>.go` file instead — see
-   `references/source-mapping-cli.md` (different method: pflag registrations
-   and constructor defaults, not `Arguments` structs). Watch for the two
-   special cases in that file (`otel.md` wraps an external module;
-   `environment-variables.md` is split between Alloy source and plain Go
-   runtime behavior).
-5. If it's `get-started/syntax.md`, `get-started/expressions/*`, or
-   `reference/stdlib/*`, use `references/source-mapping-syntax.md` instead —
-   a different subsystem again (the top-level `syntax/` Go module, not
-   `internal/`). Stdlib pages have their own deprecated/experimental-identifier
-   maps to cross-check, same principle as CLI's deprecated flags.
-6. If it's `set-up/install/*`, `set-up/run/*`, or `configure/*`, use
-   `references/source-mapping-packaging.md` instead — non-Go source (systemd
-   units, `Dockerfile`s, the NSIS installer script). Watch specifically for
-   packaged-default flag values that differ from the CLI's own built-in
-   default (confirmed real gap: `--storage.path` in `configure/linux.md`).
-7. If it's neither (a conceptual/task page), Steps 3 and 4 still apply where
-   the page makes verifiable technical claims (config syntax, default ports,
-   file paths, flag names, behavior descriptions) — just without a single
-   clean source package to diff against; see `references/source-mapping-other.md`.
-   Say so explicitly in the report rather than skipping the section. If a
-   flag, stdlib function, syntax claim, or packaging detail is mentioned in
-   passing on a task page, still check it against the relevant mapping in
-   items 4–6 above (the `reference/cli/*`, syntax/stdlib, and packaging
-   routing rules in this same list — not the later "Step 4" heading) rather
+3. Route the page by path. This table is the backbone of Steps 3 and 4;
+   each mapping file explains where that page type's facts live in source,
+   including its special cases and known gaps. All files are under
+   `references/`:
+
+   | Page path | Source mapping | Accuracy (Step 3) | Completeness (Step 4) |
+   |---|---|---|---|
+   | `reference/components/*` | `source-mapping-components.md` | `accuracy-checklist-components.md` | `completeness-checklist-components.md` |
+   | `reference/cli/*` | `source-mapping-cli.md` | `accuracy-checklist-cli.md` | `completeness-checklist-cli.md` |
+   | `get-started/syntax.md`, `get-started/expressions/*`, `reference/stdlib/*` | `source-mapping-syntax.md` | `accuracy-checklist-syntax.md` | `completeness-checklist-syntax.md` |
+   | `set-up/install/*`, `set-up/run/*`, `configure/*` | `source-mapping-packaging.md` | `accuracy-checklist-packaging.md` | `completeness-checklist-packaging.md` |
+   | `collect/*`, `monitor/*` | `source-mapping-other.md` | none | `completeness-checklist-other.md` |
+   | anything else | `source-mapping-other.md` | none | none |
+
+   Source shapes differ by row: components map to a Go package; CLI pages
+   to `internal/alloycli/cmd_<name>.go` (pflag registrations, not
+   `Arguments` structs); syntax and stdlib pages to the separate top-level
+   `syntax/` Go module; install, run, and configure pages to non-Go source
+   (systemd units, `Dockerfile`s, the NSIS installer script).
+4. If the page is in the last two rows of the table (a conceptual or task
+   page), Steps 3 and 4 still apply where the page makes verifiable
+   technical claims (config syntax, default ports, file paths, flag names,
+   behavior descriptions) — just without a single clean source package to
+   diff against; see `references/source-mapping-other.md`. Say so explicitly
+   in the report rather than skipping the section. If a flag, stdlib
+   function, syntax claim, or packaging detail is mentioned in passing on
+   such a page, still check it against the matching row of the table rather
    than treating it as unverifiable just because the whole page isn't a
    reference page.
-8. **If a page genuinely straddles two categories above** (e.g. a page that's
-   mostly conceptual but has a full CLI flag table, or sits in a directory
-   that doesn't map cleanly to any of items 3–6 above in this list), don't
-   force it into whichever category seems closest — apply every mapping
-   section whose claims actually appear on the page, and say explicitly in
-   the report which mapping(s) you used and why, rather than silently
-   picking one.
-9. **Check tooling prerequisites once, up front, rather than discovering
-   each one lazily mid-analysis.** Confirmed real failure mode: an agent
-   without Go installed attempted to build the `alloy` binary partway
-   through Step 3 (a check that should never trigger a build at all — see
-   `accuracy-checklist-components.md`'s explicit no-self-build policy) and
-   hit an avoidable, confusing failure. Check availability of, and note the
-   result for, whichever of these are actually relevant to this specific
-   request before starting Step 1:
+5. **If a page genuinely straddles two rows of the table** (e.g. a page
+   that's mostly conceptual but has a full CLI flag table, or sits in a
+   directory that doesn't map cleanly to any row), don't force it into
+   whichever row seems closest — apply every mapping section whose claims
+   actually appear on the page, and say explicitly in the report which
+   mapping(s) you used and why, rather than silently picking one.
+6. **Check tooling prerequisites once, up front, rather than discovering
+   each one lazily mid-analysis** — a check should never trigger a build
+   partway through (see `accuracy-checklist-components.md`'s explicit
+   no-self-build policy). Check availability of, and note the result for,
+   whichever of these are actually relevant to this specific request before
+   starting Step 1:
    - `alloy` binary (on `PATH` or a known local build output) — only
      relevant if the topic has `alloy` fenced code examples (Step 3's
      Example/config-snippet syntax validation). **Don't run this check
@@ -213,35 +201,19 @@ without waiting for the final report.
      about — unlike the `alloy` binary, there's no version-currency
      dimension and no natural single moment to ask before proceeding, since
      literally every page needs it. **Presence on `PATH` is not the same as
-     working** — `docs.mk` selects `podman` whenever the binary is merely
-     present, even if it's broken (e.g. a read-only-filesystem error in a
-     sandboxed environment), and a broken-but-present Podman will not
-     surface as "missing" in this upfront check at all. This upfront check
-     is a presence check only; the actual working-or-not determination
-     happens when Step 5 (via `references/style-consistency-vale.md`) actually
-     runs `make vale`. **Always invoke it as `VALE_MINALERTLEVEL=suggestion
-     make vale`, never bare `make vale`** — confirmed real, high-impact gap:
-     the bare command defaults to `error`-only and silently suppresses every
-     `suggestion`/`warning`-level rule (`Grafana.GoogleWill`,
-     `Grafana.GooglePassive`, `Grafana.Acronyms`, all `Grafana.Readability*`
-     metrics used by Step 2), while CI's actual check doesn't apply this
-     restriction — see `references/style-consistency-vale.md` for the full
-     writeup. **Confirmed behavior, not just theory**: if
-     `make vale` hits a Podman-specific error (e.g. "Failed to obtain
-     podman configuration"/read-only filesystem), a `PODMAN=docker`
-     override does NOT fix the container run — the `make-docs` script
-     `make vale` delegates to re-detects the runtime internally and
-     overrides any inherited `PODMAN` value on its own. **`PULL=false`
-     skips the make-level image pull**, which removes one of the two places
-     the error can fire, but it does not fix a genuinely broken Podman
-     install — `make-docs` still runs the container itself. This same error
-     signature has also been confirmed to sometimes be a transient, stale
-     Podman runtime state rather than a permanent break, clearable by a
-     plain retry (no override) or a clean `make vale` run elsewhere on the
-     machine. See `references/style-consistency-vale.md`'s two "Troubleshooting:"
-     notes (one for a broken-but-present Podman install, one for VS Code's
-     terminal swallowing output) for the full mechanism and the exact
-     retry-then-fallback sequence to follow.
+     working** — a broken-but-present Podman will not surface as "missing"
+     in this upfront check at all. This upfront check is a presence check
+     only; the actual working-or-not determination happens when Step 5 (via
+     `references/style-consistency-vale.md`) actually runs `make vale`.
+     **Always invoke it as `VALE_MINALERTLEVEL=suggestion make vale`, never
+     bare `make vale`** — the bare command silently suppresses every
+     `suggestion`/`warning`-level rule, including the `Grafana.Readability*`
+     metrics Step 2 uses, while CI's actual check doesn't apply this
+     restriction. If `make vale` hits a Podman-specific error (e.g. "Failed
+     to obtain podman configuration"/read-only filesystem), do NOT try a
+     `PODMAN=docker` override — it does not fix the run. Follow the
+     retry-then-fallback sequence in the two "Troubleshooting:" notes in
+     `references/style-consistency-vale.md`.
    - `git` — relevant if using Delta/PR review mode, or checking Changelog
      drift in Step 3.
    - `gh` — relevant only if reviewing a GitHub PR by number/URL in Delta/PR
@@ -258,22 +230,16 @@ Summarize, in your own words:
 - Its structure (heading hierarchy). For component reference pages, check
   against the nine required sections from `docs/developer/writing-component-documentation.md`'s
   "Page structure" (Title, Usage, Arguments, Blocks, Exported fields,
-  Component health, Debug information, Debug metrics, Examples) — a
-  component page can have more sections than these, never fewer, and a
-  section that doesn't apply to the component must still appear with its
-  documented boilerplate "doesn't expose/support..." sentence rather than
-  being omitted. Note which required sections are missing here; Step 4
-  reports any missing section as a completeness gap, per
-  `references/completeness-checklist-components.md`'s "Required section
-  presence" check. For task-style pages
-  (`set-up/install/*`, `set-up/run/*`, `configure/*`, `collect/*`,
-  `monitor/*`), name which family the page belongs to and its typical shape
-  — see `references/style-guide.md`'s "Alloy-specific note on the Task
-  template" for the four confirmed distinct family conventions (install,
-  run, configure, collect all differ from each other and from the generic
-  Task template). Don't check task pages against the generic template
-  directly; actual conformance is checked at Step 5 against same-family
-  siblings.
+  Component health, Debug information, Debug metrics, Examples) and note
+  which are missing here; Step 4 reports each missing section as a
+  completeness gap, per `references/completeness-checklist-components.md`'s
+  "Required section presence" check, which also covers inapplicable and
+  extra sections. For task-style pages (`set-up/install/*`, `set-up/run/*`,
+  `configure/*`, `collect/*`, `monitor/*`), name which family the page
+  belongs to and its typical shape — see `references/style-guide.md`'s
+  "Alloy-specific note on the Task template." Don't check task pages against
+  the generic template directly; actual conformance is checked at Step 5
+  against same-family siblings.
 - What prior knowledge it silently assumes (e.g., assumes the reader already
   knows what a "receiver" is, assumes familiarity with River/Alloy syntax,
   assumes the reader has already read a linked concept page).
@@ -310,35 +276,21 @@ exported field names and types, enum values, stability levels
 (experimental/public-preview/generally-available badges), and behavioral
 claims you can confirm by reading the code.
 
-Use `references/accuracy-checklist-components.md` for the current (evolving)
-list of specific things to check on component reference pages and how to
-find them in source, and `references/technical-verification.md` for
-risk-tiered triage order on long topics. For `reference/cli/*` pages, use
-`references/accuracy-checklist-cli.md` instead (different source shape —
-pflag registrations, not `Arguments` structs). For syntax/stdlib pages, use
-`references/accuracy-checklist-syntax.md`. For install/run/configure pages,
-use `references/accuracy-checklist-packaging.md` — watch specifically for
-packaged-default flag values differing from the CLI's own built-in default.
-For any page quoting literal `msg="..."` log output (e.g.
-`troubleshoot/debug.md`), use `references/accuracy-checklist-other.md` —
-confirmed real gap: several "common log messages" don't match any actual
-`slog` call found in the most likely source files (they read as illustrative
-paraphrases, not verbatim quotes), while others do match exactly. A
-representative sample is enough; say explicitly what was and wasn't checked.
+Use the accuracy checklist for this page type from Step 0's routing table
+(`accuracy-checklist-components.md` is the current, evolving list for
+component reference pages), and `references/technical-verification.md` for
+risk-tiered triage order on long topics. For any page quoting literal
+`msg="..."` log output (e.g. `troubleshoot/debug.md`), use
+`references/accuracy-checklist-other.md`. A representative sample is enough;
+say explicitly what was and wasn't checked.
 For any page with `alloy` fenced code examples, also run
 `accuracy-checklist-components.md`'s "Example/config-snippet syntax
-validation" section — a mechanical parser-level check (via `alloy fmt`)
-distinct from the manual attribute-name cross-reference already covered
-above, and requiring the `alloy` binary to be built locally. For
-components/flags with recent changes, also check that same file's
-"Changelog drift checks" section (CLI pages: `accuracy-checklist-cli.md`
-points back to it rather than duplicating it) — but read its overlap
-warning first: most of what a changelog comparison would catch (renamed
-fields, changed defaults) is already caught more reliably by comparing
-directly against current source above; this section is only for the
-narrower cases current-source diffing can't mechanically surface (a field
-whose *effect* silently changed without a structural change, or a breaking
-change's migration guidance missing from the doc).
+validation" section, which requires the `alloy` binary to be built locally
+(see Step 0 item 6). For components/flags with recent changes, also check
+that same file's "Changelog drift checks" section (CLI pages:
+`accuracy-checklist-cli.md` points back to it) — but read its overlap
+warning first, since most of what a changelog comparison would catch is
+already caught more reliably by comparing against current source above.
 Every discrepancy you report must cite the exact doc line and the exact
 source line/file it contradicts — no discrepancy without both sides shown.
 
@@ -361,26 +313,16 @@ check that all nine required sections from Step 1 are actually present —
 see `references/completeness-checklist-components.md`'s "Required section
 presence" check, which enforces `docs/developer/writing-component-documentation.md`'s
 page-structure rule (every section present, even a boilerplate one-liner
-for an inapplicable section, is non-negotiable, not just a style nit). See
-`references/completeness-checklist-components.md` for component reference
-pages, `references/completeness-checklist-cli.md` for `reference/cli/*`
-pages, `references/completeness-checklist-syntax.md` for
-`get-started/syntax.md`/`expressions/*`/`reference/stdlib/*` pages, and
-`references/completeness-checklist-packaging.md` for install/run/configure
-pages. The three non-component files use different source shapes than
-`Arguments` structs, and each has already caught (or is specifically
-designed to catch) a real, confirmed gap of its kind: an undocumented
-deprecated CLI flag, the parallel deprecated/experimental-identifier pattern
-in stdlib, and a wrong packaged-default flag value in `configure/linux.md`.
+for an inapplicable section, is non-negotiable, not just a style nit). Use
+the completeness checklist for this page type from Step 0's routing table.
+The three non-component files use different source shapes than `Arguments`
+structs.
 
 For `collect/*` and `monitor/*` multi-component pages, also run
 `references/completeness-checklist-other.md`'s "Self-referential
 completeness" method — this one compares the doc against *itself* (a stated
 "components used" list or per-section count vs. the actual component blocks
-in its own examples), not against Go source at all. Confirmed real gap of
-this kind: `collect/opentelemetry-data.md`'s component list is missing
-`otelcol.processor.memory_limiter`, which its own "Configure batching"
-example uses.
+in its own examples), not against Go source at all.
 
 Distinguish "clearly missing and should be documented" from "intentionally
 internal/undocumented" (e.g., fields with no `alloy:"..."` tag) — don't flag the
@@ -402,39 +344,21 @@ six sub-files, one per check group below:
    legitimate Alloy/Grafana terms simply missing from the
    `writers-toolkit` dictionary, which get a drafted dictionary entry
    proposed instead of a doc edit. Full method: `references/style-consistency-vale.md`.
-2. A manual style checklist (voice/tense, sentence-case headings, "refer to"
-   vs. "see," trailing-slash links, admonition sparingness, no gerunds in
-   headings or body prose — body prose is a stricter house rule beyond
-   Vale's own heading-only `Gerunds.yml`, parenthetical-aside avoidance,
-   judicious semicolon use, lazy/repetitive list numbering which no Vale
-   rule covers at all, sentence/paragraph length limits, "be positive,"
-   third-party product content scope, unordered-list capitalization/period/
-   alphabetical-sort conventions, link text quality, example-credential
-   security (must be obviously fake, not just inconvenient), prose
-   placeholder formatting (italic+code+angle-bracket together), and
-   ellipsis/three-dot omission in partial examples — the last several found
-   via a direct `writers-toolkit` cross-check) for whenever Docker isn't
-   available or as a second pass regardless. Includes a terminology check
-   against `references/word-list.md` — most entries already have a
-   dedicated Vale rule (check `WordList.yml`'s substitution table directly,
-   not just a standalone rule file, per that file's own instruction),
-   so the manual pass only needs to cover the five genuinely uncovered
-   terms — and, for component reference pages, a parameter table format
-   check: Arguments/Blocks tables follow one exact, rigid column shape
-   every time, and a confirmed row-order convention (required rows first,
-   each group alphabetized), not a loose "prefer tables" suggestion.
-   The same file also holds the Usage section format check (required-only,
-   one block, with one documented exception) and the deprecated-argument
-   check (table-cell format plus page-wide consistency).
-   **Check row order on every Arguments/Blocks table, every run — don't
-   skip it because the table "looks fine" at a glance.** Confirmed real
-   miss: an earlier pass over `pyroscope.ebpf.md` documented this rule but
-   didn't apply it, both to a newly-added block's argument table and to the
-   page's pre-existing Arguments table (which had drifted out of order as
-   fields were appended over time instead of inserted alphabetically) —
-   the rule existed in this reference file the whole time; the run simply
-   didn't read this file far enough to reach it. Full method:
-   `references/style-consistency-manual-checklist.md`.
+2. Manual style checklist — for whenever Docker isn't available, or as a
+   second pass regardless. Read
+   `references/style-consistency-manual-checklist.md` in full — not just its
+   first sections — and run every section of it, which covers:
+   - the manual style checklist and its `writers-toolkit` cross-check items
+     (including list conventions and bullet markers)
+   - link text quality, example-credential security, prose placeholder
+     formatting, and ellipsis in partial examples
+   - systemic wording vs. one-off defects
+   - the terminology check against `references/word-list.md` (just the five
+     terms with no Vale rule)
+   - component reference pages only: the parameter table format check, the
+     Usage section format check, and the deprecated-argument check.
+     **Check row order on every Arguments/Blocks table, every run — don't
+     skip it because the table "looks fine" at a glance.**
    Before reporting anything from this group, filter it against
    `references/dont-flag.md` — a consolidated list of finding classes that
    were raised in real reviews and explicitly declined, including everything
@@ -445,9 +369,7 @@ six sub-files, one per check group below:
 4. Sub-feature stability callout consistency — separate from the page-level
    three-way check, this is about prose describing a specific flag/block/
    capability as experimental/public-preview/community when a shared partial
-   already exists for exactly that purpose and isn't being used. Confirmed
-   two real instances (`reference/cli/run.md`'s `--windows.priority` note;
-   `set-up/otel_engine.md`'s near-paraphrase of `experimental_otel.md`). Full
+   already exists for exactly that purpose and isn't being used. Full
    method: `references/style-consistency-stability-callouts.md`.
 5. Three separate cascade-variable checks — run each independently, not as one
    combined pass: (a) product-name/branded-term hardcoding, (b) version-string
@@ -465,41 +387,29 @@ six sub-files, one per check group below:
    `references/style-consistency-links-shortcodes.md`.
 7. Internal link check — both reference-style (`[label]: path`) and inline
    links, resolved against the target's *actual* current location, not just
-   whether some redirect/alias makes the old path still "work." Confirmed
-   real bug: `tutorials/first-components-and-stdlib.md` has two links that
-   only resolve via `aliases:` redirects on the target pages, pointing at a
-   directory structure (`get-started/configuration-syntax/`) that no longer
-   exists. Also covers link *style* consistency (reference vs. inline,
+   whether some redirect/alias makes the old path still "work." Also covers
+   link *style* consistency (reference vs. inline,
    relative vs. hardcoded absolute URL, trailing slash). Full method:
    `references/style-consistency-links-shortcodes.md`.
 8. Cross-topic comparison against 2–3 sibling topics (heading order,
    admonition placement, example conventions, terminology, voice/tense). For
-   task-style pages, siblings must come from the **same subdirectory**
-   (e.g. other `set-up/install/*.md` pages for an install page, not a
-   `configure/*.md` page) — confirmed that install/run/configure/collect
-   each have their own distinct structural convention, so a cross-family
-   comparison would manufacture false inconsistencies. A within-family
-   difference (e.g. one install page has an explicit `## Verify` heading,
-   a sibling folds verification into a numbered step instead) is a real,
+   task-style pages, siblings must come from the **same subdirectory** (e.g.
+   other `set-up/install/*.md` pages for an install page), since each family
+   has its own structural convention. A within-family difference is a real,
    worth-flagging inconsistency; a between-family difference is expected.
-   If fewer than 2 real siblings exist to compare against (a genuinely
-   unique page, or a very small family), say so explicitly rather than
-   asserting a "convention" from a single example — one data point isn't a
-   pattern. **When the work is split across several open branches, read
-   each sibling from the branch that owns it (`git show <branch>:<path>`),
-   not from the working tree** — see "Reading sibling topics for
-   comparison" in `references/style-consistency-manual-checklist.md`. Full
-   method: `references/style-consistency-cascade-vars.md`.
+   If fewer than 2 real siblings exist to compare against, say so
+   explicitly rather than asserting a "convention" from a single example.
+   **When the work is split across several open branches, read each sibling
+   from the branch that owns it (`git show <branch>:<path>`), not from the
+   working tree** — see "Reading sibling topics for comparison" in
+   `references/style-consistency-manual-checklist.md`. Full method:
+   `references/style-consistency-cascade-vars.md`.
 
-Report automated findings (Vale/`make vale` rule violations, including the
+Report automated findings (Vale rule violations, including the
 `Grafana.Spelling` typo-vs-dictionary-gap split) separately from every other
-check above, which are judgment/manual findings even when the method is
-mechanical (e.g. the shortcode and parameter-table-format checks apply a
-fixed rule, but Vale doesn't enforce it, so a person still needs to weigh
-the finding) — manual style checklist, frontmatter, sub-feature stability
-callouts, cascade variables, shortcode validity, links, and cross-topic
-comparison all fall on the manual/judgment side, each in its own labeled
-output subsection per the format below.
+check above. Those are judgment/manual findings even when the method is
+mechanical, because Vale doesn't enforce them; each goes in its own labeled
+subsection per the Output format below.
 
 ## Other modes
 
@@ -526,135 +436,43 @@ five steps below.
 
 ## Output format
 
-Produce a single markdown report with these sections, in this order:
+Produce a single markdown report titled `# Analysis: <topic path>`. Before
+writing it, read `references/report-template.md` and follow its sections in
+this order, with the guidance it gives for each:
 
-```
-# Analysis: <topic path>
-
-## Summary
-(2-4 sentences: what the topic is, overall health; if in Delta/PR review mode,
-state the scope explicitly here, e.g. "Scope: PR #1234 delta only (lines
-X–Y); N additional pre-existing findings exist outside this diff")
-
-## Audience
-(persona, use case, entry state, evidence, mismatch flag if any, what's missing for this reader)
-
-## Accuracy issues
-(table or list: doc claim | source reality | file:line citation for both | proposed fix)
-
-## Source defects
-(omit this section entirely when there are none. One entry per defect:
-component | argument/metric/behavior affected | root cause with file:line per
-hop | the doc disposition chosen and its revert condition | confidence,
-naming what was verified against source versus inferred. See
-`references/source-defects.md` — these are not doc fixes, so don't fold them
-into Accuracy issues)
-
-## Completeness gaps
-(table or list: what's missing | where it lives in source | suggested doc location | proposed text)
-
-## Style & consistency
-### Vale findings
-(rule violations, with the corrected text where Vale doesn't already supply it;
-for `Grafana.Spelling` specifically, split into "typo — corrected spelling
-proposed" vs. "legitimate term missing from the dictionary — drafted
-writers-toolkit dictionary entry proposed," per the method above — don't
-collapse these into one undifferentiated list)
-### Manual style checklist findings
-(voice/tense/heading-case/"refer to" vs. "see" issues; word-list terminology
-violations against `references/word-list.md`, scoped to the entries with no
-dedicated Vale rule; parameter table format issues on component reference
-pages — all judgment/manual findings distinct from the automated Vale
-findings above)
-### Frontmatter and template-shape findings
-(enum/required-field errors with proposed corrected frontmatter block; template-shape
-deviation flagged with a proposed direction — fix the template's documentation, or
-fix this page — per the systemic-vs-one-off distinction above)
-### Sub-feature stability callout findings
-(prose stability claims where a shared partial exists and isn't used, with the
-correct partial name proposed — not just "a" shortcode, the right one for the
-subject type — and any wording-mismatch caveat noted explicitly, e.g. the
-`public_preview.md` component-vs-flag wording gap)
-### Shortcode validity findings
-(unrecognized shortcode names or missing required parameters against
-`references/shortcode-schema.md`; any generic/other-product shortcode used
-where Alloy has its own convention, e.g. `docs/public-preview` instead of the
-correct `stability/*.md` partial — reported separately from the sub-feature
-stability findings above, since this check is about the shortcode mechanism
-itself, not which partial best fits a given claim)
-### Cascade variable findings (Checks A/B/C, reported separately)
-- **A — product-name/branded-term hardcoding**: every hardcoded
-  `Alloy`/`Grafana Alloy`/`OTel Engine`/etc., with the proposed `{{< param >}}`
-  replacement. No bare-text exceptions on Alloy.
-- **B — version-string substitution**: hardcoded version strings, with the
-  correct mechanism proposed (`{{< param >}}` in prose vs. angle-bracket inside
-  `version="..."` attributes).
-- **C — heading delimiter**: any heading using `{{< param >}}` instead of the
-  required `{{% param %}}`, with the corrected heading text.
-### Link findings
-(stale links — resolved only via an alias/redirect, not their real current
-location — with the exact corrected path; link-style inconsistencies within
-the page, reported separately from staleness)
-### Cross-topic inconsistencies
-(with a proposed resolution — which sibling's convention should win, and why)
-
-## Skipped checks
-(any check that couldn't run, or ran with a caveat, because a required
-tool/binary was missing or outdated — per Step 0 item 9's prerequisite
-check — with the specific prerequisite named, whether the person was asked
-about it, and how to resolve it, e.g. "Example/config-snippet syntax
-validation skipped: `alloy` binary not found; build with `make alloy` from
-the repo root to enable" or "Example/config-snippet syntax validation ran
-against `alloy` v1.16.0, older than the docs' current `ALLOY_RELEASE`
-(v1.18.0); results may not reflect current syntax/behavior." Distinct from
-"Open questions" below: this section is about missing/outdated
-infrastructure, not content uncertainty. Omit this section entirely if
-every relevant prerequisite was available and current.)
-
-## Open questions
-(anything you couldn't verify — flag rather than guess)
-```
+1. Summary (in Delta/PR review mode, state the scope explicitly)
+2. Audience
+3. Accuracy issues
+4. Source defects
+5. Completeness gaps
+6. Style & consistency, with these subsections: Vale findings; Manual style
+   checklist findings; Frontmatter and template-shape findings; Sub-feature
+   stability callout findings; Shortcode validity findings; Cascade variable
+   findings (Checks A/B/C, reported separately); Link findings; Cross-topic
+   inconsistencies
+7. Skipped checks
+8. Open questions
 
 If a section has no findings, say so explicitly ("No accuracy issues found against
 `component/otelcol/processor/transform`") rather than omitting the section — an
-absent section reads as "not checked."
+absent section reads as "not checked." The two exceptions are Source defects
+and Skipped checks, which are omitted entirely when empty.
 
-**Closing reminder, every time this skill produces a report with findings**:
-add a final line after "Open questions" reminding the person that once the
-fixes from this report are actually applied (e.g. merged in a PR) — not
-before — the page's `review_date` frontmatter field should be updated to the
-merge date, in `YYYY-MM-DD` format (`writers-toolkit`'s documented format,
-confirmed real: "the date you last reviewed a page for correctness,"
-rendered as "Last reviewed:" on the published page). This is a reminder for
-the person to act on themselves, not something this skill does — consistent
-with the never-edit-files rule at the top of this document, which applies
-here too even though bumping a date field might seem trivially safe. Word it
-something like: "Once these fixes are merged, remember to update this
-page's `review_date` to today's date." Skip this reminder only if the report
-found genuinely nothing to fix (an all-clean result doesn't need a review-date
-bump prompt, though the person may still choose to record that a review
-happened).
+**Closing reminder, every time the report has findings**: add a final line
+after "Open questions" telling the person that once the fixes are actually
+merged (not before), the page's `review_date` frontmatter field should be
+updated to the merge date in `YYYY-MM-DD` format. This is a reminder for the
+person to act on, not something this skill does — the never-edit-files rule
+applies here too. Word it something like: "Once these fixes are merged,
+remember to update this page's `review_date` to today's date." Skip it only
+if the report found nothing to fix.
 
 ## Roadmap: genuinely open items
 
-Everything that used to be tracked here as "not yet built" has been resolved
-and folded into the checks/modes above. Two items remain genuinely,
-permanently open rather than just unbuilt — see `references/additional-checks.md`
-for the full reasoning on each:
-
-- Full 8-repo front matter audit integration — genuinely blocked, not just
-  unbuilt: the full audit is a Google Doc this environment has no way to
-  access. The two specific findings named in memory (`headless`/`killercoda`
-  fields, absent `labels` outside `reference/`) are already covered,
-  confirmed independently by direct file inspection rather than copied from
-  the doc — see `references/additional-checks.md` for what would be needed
-  to go further (the doc's content pasted in or exported to a readable file)
-- Scannability heuristics that remain genuine judgment calls without a
-  confirmed convention to check against (lead-paragraph length,
-  bullet-vs-prose ratio) — the "parameter lists as tables" part of this is
-  now handled by Step 5's "Parameter table format check"; see
-  `references/additional-checks.md` for why the rest deliberately isn't a
-  mechanical rule
+Two items remain permanently open: the full 8-repo front matter audit (a
+Google Doc this environment can't access) and scannability heuristics with no
+confirmed convention to check against. See `references/additional-checks.md`
+for the full reasoning on each.
 
 ## References and provenance
 

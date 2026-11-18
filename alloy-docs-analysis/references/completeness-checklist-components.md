@@ -89,7 +89,10 @@ Contexts section) — those are sanctioned additions, not deviations.
 - [ ] New enum values added to a type's `UnmarshalText` switch since the doc was
       last touched (compare against what the doc lists).
 - [ ] Fields with a `// Deprecated:` comment in source — confirm the doc marks
-      them deprecated too, with guidance on the replacement.
+      them deprecated too, with guidance on the replacement. Check the cell
+      format and page-wide consistency against
+      `references/style-consistency-manual-checklist.md`'s "Deprecated
+      arguments" section.
 - [ ] Exported fields on the `Exports` type not mentioned in an "Exported
       fields" section, if the doc has one.
 - [ ] Component-level capabilities implied by interfaces the component

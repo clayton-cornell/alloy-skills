@@ -11,8 +11,9 @@ Step 5 runs all of the sub-checks below, each in its own file:
 
 1. Automated linting (`make vale`) and `Grafana.Spelling` handling →
    `references/style-consistency-vale.md`
-2. Manual style checklist, terminology/word-list check, and parameter table
-   format check → `references/style-consistency-manual-checklist.md`
+2. Manual style checklist, terminology/word-list check, parameter table
+   format check, Usage section format check, and deprecated-argument check →
+   `references/style-consistency-manual-checklist.md`
 3. Frontmatter presence/enum-validity and the three-way stability
    cross-check → `references/style-consistency-frontmatter.md`
 4. Sub-feature stability callout consistency (body-prose stability claims,

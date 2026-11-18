@@ -236,6 +236,34 @@ Two defects in one function. Both corrupt the connection URL and put credential 
 
 ---
 
+### Issue 12: `prometheus.exporter.snmp`: `walk_param` overrides drop `use_unconnected_udp_socket` and zero out `retries`
+
+Both defects are in the same override block in `Handler`, which applies a `walk_param` profile to each module when a target names one.
+
+**A. Omitting `retries` sets retries to `0`**
+- **What happens:** a `walk_param` block that doesn't set `retries` replaces the module's retries (upstream default `3`) with `0`, so targets that use the block never retry a failed request.
+- **Why:** `Convert()` always passes a non-nil pointer, `&walkParam.Retries`, which points to `0` when the attribute is omitted. The handler then checks `wp.Retries != &zeroRetries`, which compares two pointers rather than the values. `zeroRetries` is a fresh local, so the addresses never match, the check is always true, and the module value is always overwritten.
+- **Where:** `internal/component/prometheus/exporter/snmp/snmp.go:128` (pointer passed in `Convert()`); `internal/static/integrations/snmp_exporter/snmp.go:92` (`zeroRetries := 0`) and `:97` (the pointer comparison). Upstream default: `snmp_exporter@v0.29.0/config/config.go:77` and `:88`.
+- **Contrast with the neighbouring fields:** `max_repetitions` and `timeout` are guarded with `!= 0` (`:94`, `:100`), so omitting them keeps the module's value. Only `retries` is wrong.
+- **Side effect of any fix:** an explicit `retries = 0` and an omitted `retries` are indistinguishable once converted. A value check (`*wp.Retries != 0`) restores the module default but makes "no retries" impossible to set through a `walk_param` block. Making `WalkParam.Retries` a `*int` in the component would keep both.
+- **Repro (not run):** a `walk_param` block with only `timeout` set, used by a target. Expect `snmp_scrape_packets_retried` to stay at `0` against an unreliable device where the module alone would retry.
+
+**B. `use_unconnected_udp_socket` is accepted and dropped**
+- **What happens:** setting `use_unconnected_udp_socket = true` in a `walk_param` block has no effect. No error or warning.
+- **Why:** `Convert()` carries the value into `snmp_config.WalkParams`, but the override block in `Handler` copies only `MaxRepetitions`, `Retries` and `Timeout` into `module.WalkParams`. Upstream reads the flag only from `module.WalkParams`, so the profile's value never reaches the SNMP client.
+- **Where:** `internal/component/prometheus/exporter/snmp/snmp.go:117` (argument) and `:130` (converted); `internal/static/integrations/snmp_exporter/snmp.go:91-107` (override block, flag not copied). Upstream use: `snmp_exporter@v0.29.0/collector/collector.go:353` and `:445-453`.
+- **Also affected:** the v2 static integration calls the same `Handler` (`internal/static/integrations/v2/snmp_exporter/snmp.go:130`), and the static converter maps the field into the Alloy argument (`internal/converter/internal/staticconvert/internal/build/snmp_exporter.go:48`, `:99`), so converted configs keep a setting that does nothing.
+- **Workaround:** set `use_unconnected_udp_socket: true` on the module in the SNMP config YAML (`config` or `config_files`). Upstream reads it from the module, so that path should work. Not run.
+
+- **Possible fix:** in the override block, compare `*wp.Retries` instead of the pointer (or change the component field to `*int`), and copy `UseUnconnectedUDPSocket` when it is `true`. Upstream `WalkParams` also has `AllowNonIncreasingOIDs` (`snmp_exporter@v0.29.0/config/config.go:113`), which Alloy doesn't expose. Not a defect, but worth deciding in the same change since it lives in the same struct and block.
+- **Impact:** A is medium: any `walk_param` block that only tunes `timeout` or `max_repetitions` silently turns off retries. B is low: the option is a niche fix for devices that reply from a different source address.
+- **Docs (updated 2026-10-21):** on branch `docs/validate-prometheus-exporter-snmp-docs`, the `retries` default now reads `0` with a note that a `walk_param` block always overrides the module's `retries` and that omitting it disables retries. Revert both to a `3` default if A is fixed. `use_unconnected_udp_socket` was removed from the `walk_param` table (commit `ede432c81` had added it on the same branch). Add it back if B is fixed.
+- **Checked:** by reading the Alloy source and `snmp_exporter@v0.29.0`. Not run.
+
+**Related:** branch `docs/validate-prometheus-exporter-snmp-docs`. PR number not recorded.
+
+---
+
 [grafana/alloy]: https://github.com/grafana/alloy
 [#7270]: https://github.com/grafana/alloy/pull/7270
 [#7281]: https://github.com/grafana/alloy/pull/7281

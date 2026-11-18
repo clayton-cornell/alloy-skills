@@ -349,6 +349,70 @@ breaks this order (an optional row before a required one, or either group
 out of alphabetical order) and propose the corrected row order — this is a
 distinct finding from column shape, and both can be checked independently.
 
+### Usage section format check (component reference pages)
+
+Source of truth: `docs/developer/writing-component-documentation.md`'s
+Usage section. The default rule:
+
+- One `alloy` code block. No lead-in sentence, no description, no
+  subheadings.
+- The label is `"<LABEL>"`, and every value the user replaces is a
+  `<YELLING_SNAKE_CASE>` placeholder.
+- Only required arguments and blocks. A component with nothing required
+  gets an empty body (`prometheus.exporter.consul "<LABEL>" {` / `}`).
+- Two-space indentation, matching every reviewed page.
+
+**Exception: alternatives the component can't work without.** When a
+component needs at least one of several optional arguments or blocks to do
+its job, Usage shows that minimum working config, including the optional
+items. If the alternatives are mutually exclusive, show each one.
+Confirmed case: `prometheus.exporter.snmp`'s `target` block and `targets`
+argument are both optional and mutually exclusive in source, but the
+component collects nothing without one of them, so Usage demonstrates both
+forms.
+
+Apply the exception only when the component can't do its job without one
+of the alternatives — never because an optional argument is commonly set.
+When a Usage section relies on the exception, say so in the report and name
+the alternatives and the source evidence.
+
+**What to flag**: more than one code block, a lead-in, or subheadings when
+the exception doesn't apply; optional arguments the exception doesn't
+cover; an unbracketed `"LABEL"`; four-space indentation. Propose the
+corrected block.
+
+### Deprecated arguments (component reference pages)
+
+The deprecation admonition and its wording follow `writers-toolkit`:
+<https://grafana.com/docs/writers-toolkit/write/deprecate-remove/#deprecation>.
+Its passive and future-tense template wording is intended — don't propose
+"fixing" it to satisfy Vale.
+
+`writers-toolkit` doesn't cover Arguments tables. There, the Description
+cell uses this format:
+
+```text
+Deprecated. Use <REPLACEMENT> instead. <Condensed previous description>.
+```
+
+- Include the "Use … instead." sentence only when a replacement exists.
+  Without one, the cell is `Deprecated. <Condensed previous description>.`
+- Always keep a condensed version of the previous description.
+- Lead with the `Deprecated.` sentence, never a `(Deprecated)` prefix.
+
+Then check the whole page, not just the row:
+
+- Usage, Examples, and prose don't use or recommend the deprecated item.
+  They use the replacement, or drop the item when there's none.
+- Prose reflects the deprecation. Text that still presents the deprecated
+  item as current gets rewritten. Don't add behaviour documentation for it
+  beyond the condensed cell description — see `references/dont-flag.md`.
+
+**What to flag**: a cell missing the `Deprecated.` lead, the replacement
+sentence, or the condensed description; and any example or prose that
+still steers readers to the deprecated item. Propose the corrected cell and
+the corrected text.
+
 ## Reading sibling topics for comparison
 
 **When a documentation effort is split across several open branches, read

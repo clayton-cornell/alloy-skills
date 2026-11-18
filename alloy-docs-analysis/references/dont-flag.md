@@ -75,8 +75,11 @@ Functional bugs in source *are* in scope — see
 ## Deprecated arguments
 
 **Don't document the behaviour of a deprecated argument.** A deprecated
-argument gets migration guidance in its deprecation admonition and nothing
-else, even when the code still implements the old behaviour. A PR that
+argument gets migration guidance in its deprecation admonition and a
+condensed description in its table cell (format:
+`references/style-consistency-manual-checklist.md`'s "Deprecated
+arguments"), and nothing else, even when the code still implements the old
+behaviour. A PR that
 deletes legacy-behaviour prose is doing that deliberately — don't "restore"
 it.
 
